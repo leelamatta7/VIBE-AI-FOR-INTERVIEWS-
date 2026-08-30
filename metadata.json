@@ -1,0 +1,11 @@
+{
+  "name": "Remix VIBE AI",
+  "description": "Real-time AI video interviewer with multilingual speech, live coding sandbox, silent YOLO object \u0026 3-foot proximity detection, 360-degree room verification, and evidence-based candidate assessment.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
