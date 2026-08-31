@@ -1,32 +1,41 @@
 import React, { useState } from "react";
 import {
   Users,
+  Search,
+  Filter,
   CheckCircle2,
   XCircle,
   Clock,
-  Search,
-  Filter,
+  ChevronRight,
   Eye,
-  Sparkles,
-  ArrowUpDown,
   FileText,
   ShieldCheck,
-  Award,
-  ChevronRight,
   TrendingUp,
+  Sparkles,
+  Play,
+  UserCheck,
   AlertTriangle,
   Send,
-  SlidersHorizontal,
-  Play,
+  Bell,
+  Mail,
+  Building2,
+  Check,
+  Award,
 } from "lucide-react";
-import { ApplicantRecord, ApplicantDecision, CompanyJobRole } from "../types";
+import {
+  ApplicantRecord,
+  ApplicantDecision,
+  CompanyJobRole,
+  CandidateNotification,
+} from "../types";
 
 interface CandidatePipelineTableProps {
   applicants: ApplicantRecord[];
   jobRoles: CompanyJobRole[];
-  onUpdateDecision: (applicantId: string, decision: ApplicantDecision, notes?: string) => void;
+  onUpdateDecision: (applicantId: string, decision: ApplicantDecision, notes?: string, fitEvaluation?: "Fit" | "Unfit") => void;
   onSelectForFitAnalysis: (applicant: ApplicantRecord) => void;
   onLaunchCandidateInterview?: (applicant: ApplicantRecord) => void;
+  onSendCandidateNotification?: (notification: CandidateNotification) => void;
 }
 
 export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
@@ -35,93 +44,145 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
   onUpdateDecision,
   onSelectForFitAnalysis,
   onLaunchCandidateInterview,
+  onSendCandidateNotification,
 }) => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedDepartment, setSelectedDepartment] = useState("all");
-  const [selectedDecision, setSelectedDecision] = useState("all");
-  const [selectedFit, setSelectedFit] = useState("all");
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [selectedDepartment, setSelectedDepartment] = useState<string>("all");
+  const [selectedDecision, setSelectedDecision] = useState<string>("all");
+  const [selectedFit, setSelectedFit] = useState<string>("all");
 
-  // Decision Modal State
+  // Modal State
   const [activeModalApplicant, setActiveModalApplicant] = useState<ApplicantRecord | null>(null);
-  const [modalAction, setModalAction] = useState<"accept" | "reject" | "view_details" | null>(null);
-  const [decisionNotesInput, setDecisionNotesInput] = useState("");
+  const [modalAction, setModalAction] = useState<"accept" | "reject" | "view_details" | "send_notification" | null>(null);
+  const [decisionNotesInput, setDecisionNotesInput] = useState<string>("");
+  const [notificationMessage, setNotificationMessage] = useState<string>("");
+  const [notificationSentSuccess, setNotificationSentSuccess] = useState<string | null>(null);
 
-  // Filtered applicants
+  // Departments list from roles
+  const departments = Array.from(new Set(jobRoles.map((r) => r.department)));
+
+  // Filter Logic
   const filteredApplicants = applicants.filter((app) => {
     const matchesSearch =
       app.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.targetRoleName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (app.companyName && app.companyName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       app.skills.some((s) => s.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesDept =
-      selectedDepartment === "all" || app.department.toLowerCase() === selectedDepartment.toLowerCase();
-
-    const matchesDecision =
-      selectedDecision === "all" || app.decision.toLowerCase() === selectedDecision.toLowerCase();
-
+    const matchesDept = selectedDepartment === "all" || app.department === selectedDepartment;
+    const matchesDecision = selectedDecision === "all" || app.decision === selectedDecision;
     const matchesFit =
-      selectedFit === "all" ||
-      (selectedFit === "strong" && app.matchPercentage >= 85) ||
-      (selectedFit === "moderate" && app.matchPercentage >= 70 && app.matchPercentage < 85) ||
-      (selectedFit === "borderline" && app.matchPercentage < 70);
+      selectedFit === "all"
+        ? true
+        : selectedFit === "strong"
+        ? app.matchPercentage >= 85
+        : selectedFit === "moderate"
+        ? app.matchPercentage >= 70 && app.matchPercentage < 85
+        : app.matchPercentage < 70;
 
     return matchesSearch && matchesDept && matchesDecision && matchesFit;
   });
 
-  // Calculate Metrics
-  const totalInterviewed = applicants.length;
-  const acceptedCount = applicants.filter((a) => a.decision === "accepted").length;
-  const rejectedCount = applicants.filter((a) => a.decision === "rejected").length;
+  // Aggregate Metrics
+  const totalCount = applicants.length;
+  const acceptedCount = applicants.filter((a) => a.decision === "accepted" || a.recruiterFitEvaluation === "Fit").length;
+  const rejectedCount = applicants.filter((a) => a.decision === "rejected" || a.recruiterFitEvaluation === "Unfit").length;
   const underReviewCount = applicants.filter((a) => a.decision === "under_review" || a.decision === "completed").length;
+
   const avgMatch =
-    totalInterviewed > 0
-      ? Math.round(applicants.reduce((acc, a) => acc + a.matchPercentage, 0) / totalInterviewed)
+    totalCount > 0
+      ? Math.round(applicants.reduce((sum, a) => sum + a.matchPercentage, 0) / totalCount)
       : 0;
+
   const avgIntegrity =
-    totalInterviewed > 0
-      ? Math.round(applicants.reduce((acc, a) => acc + a.integrityScore, 0) / totalInterviewed)
-      : 100;
+    totalCount > 0
+      ? Math.round(applicants.reduce((sum, a) => sum + a.integrityScore, 0) / totalCount)
+      : 0;
 
-  const departments = Array.from(new Set(applicants.map((a) => a.department)));
-
-  const handleOpenDecisionModal = (applicant: ApplicantRecord, action: "accept" | "reject" | "view_details") => {
-    setActiveModalApplicant(applicant);
+  const handleOpenDecisionModal = (app: ApplicantRecord, action: "accept" | "reject" | "view_details" | "send_notification") => {
+    setActiveModalApplicant(app);
     setModalAction(action);
-    setDecisionNotesInput(
-      applicant.decisionNotes ||
-        (action === "accept"
-          ? "Exceeded technical bar and demonstrated verified integrity. Recommended for next onboarding step."
-          : action === "reject"
-          ? "Does not meet the current seniority or specific technical requirement threshold."
-          : "")
-    );
+    setDecisionNotesInput(app.decisionNotes || "");
+    setNotificationSentSuccess(null);
+
+    if (action === "send_notification" || action === "accept") {
+      setNotificationMessage(
+        `Dear ${app.name},\n\nWe are pleased to inform you that following your VIBE AI technical evaluation for the ${app.targetRoleName} role at ${app.companyName || "our organization"}, our hiring team has marked you as FIT and is extending an offer. We look forward to welcoming you aboard!\n\nBest regards,\nRecruitment & Talent Operations Team`
+      );
+    } else if (action === "reject") {
+      setNotificationMessage(
+        `Dear ${app.name},\n\nThank you for undergoing the technical assessment for ${app.targetRoleName} at ${app.companyName || "our organization"}. After careful review of your interview responses, our team has decided to pursue other candidates whose skillsets align more closely with our current requirements.\n\nWe appreciate your effort and wish you success in your job search.`
+      );
+    }
   };
 
   const handleConfirmDecision = () => {
-    if (!activeModalApplicant || !modalAction || modalAction === "view_details") return;
-    onUpdateDecision(
-      activeModalApplicant.id,
-      modalAction === "accept" ? "accepted" : "rejected",
-      decisionNotesInput
-    );
+    if (!activeModalApplicant || !modalAction) return;
+
+    if (modalAction === "accept") {
+      onUpdateDecision(
+        activeModalApplicant.id,
+        "accepted",
+        decisionNotesInput || "Candidate demonstrated excellent technical competency and is approved for hire.",
+        "Fit"
+      );
+    } else if (modalAction === "reject") {
+      onUpdateDecision(
+        activeModalApplicant.id,
+        "rejected",
+        decisionNotesInput || "Candidate did not meet required senior architectural threshold.",
+        "Unfit"
+      );
+    }
+
     setActiveModalApplicant(null);
     setModalAction(null);
   };
 
+  const handleSendNotificationSubmit = () => {
+    if (!activeModalApplicant) return;
+
+    const isFit = activeModalApplicant.decision === "accepted" || activeModalApplicant.recruiterFitEvaluation === "Fit";
+    const notif: CandidateNotification = {
+      id: `notif_${Date.now()}`,
+      candidateEmail: activeModalApplicant.email,
+      candidateName: activeModalApplicant.name,
+      companyName: activeModalApplicant.companyName || "Tech Enterprise",
+      roleName: activeModalApplicant.targetRoleName,
+      status: isFit ? "fit_offer" : "unfit_rejected",
+      title: isFit
+        ? `🎉 Offer Extended: ${activeModalApplicant.targetRoleName} at ${activeModalApplicant.companyName || "Tech Enterprise"}`
+        : `Update regarding your application for ${activeModalApplicant.targetRoleName}`,
+      message: notificationMessage || "Your candidate status has been updated by the recruitment team.",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      read: false,
+    };
+
+    if (onSendCandidateNotification) {
+      onSendCandidateNotification(notif);
+    }
+
+    // Mark notification sent on applicant record
+    onUpdateDecision(
+      activeModalApplicant.id,
+      activeModalApplicant.decision,
+      activeModalApplicant.decisionNotes,
+      activeModalApplicant.recruiterFitEvaluation
+    );
+
+    setNotificationSentSuccess(`Live notification dispatched to ${activeModalApplicant.email}!`);
+    setTimeout(() => {
+      setActiveModalApplicant(null);
+      setModalAction(null);
+      setNotificationSentSuccess(null);
+    }, 1200);
+  };
+
   return (
     <div className="space-y-6">
-      {/* 1. Top KPI Overview Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
-          <div className="flex items-center justify-between text-gray-500 text-xs font-semibold uppercase mb-1">
-            <span>Interviewed</span>
-            <Users className="w-3.5 h-3.5 text-blue-500" />
-          </div>
-          <div className="text-2xl font-bold font-mono text-gray-900">{totalInterviewed}</div>
-          <span className="text-[10px] text-gray-400">Total Applicants</span>
-        </div>
-
+      {/* 1. Header & Quick Filter KPI Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div
           onClick={() => setSelectedDecision("accepted")}
           className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-xs ${
@@ -131,13 +192,11 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
           }`}
         >
           <div className="flex items-center justify-between text-emerald-700 text-xs font-semibold uppercase mb-1">
-            <span>Accepted</span>
+            <span>Fit / Hired</span>
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
           </div>
           <div className="text-2xl font-bold font-mono text-emerald-600">{acceptedCount}</div>
-          <span className="text-[10px] text-emerald-600/70">
-            {totalInterviewed > 0 ? Math.round((acceptedCount / totalInterviewed) * 100) : 0}% Acceptance
-          </span>
+          <span className="text-[10px] text-emerald-600/70">Offers Extended</span>
         </div>
 
         <div
@@ -149,11 +208,11 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
           }`}
         >
           <div className="flex items-center justify-between text-rose-700 text-xs font-semibold uppercase mb-1">
-            <span>Rejected</span>
+            <span>Unfit / Declined</span>
             <XCircle className="w-3.5 h-3.5 text-rose-600" />
           </div>
           <div className="text-2xl font-bold font-mono text-rose-600">{rejectedCount}</div>
-          <span className="text-[10px] text-rose-600/70">Declined Applicants</span>
+          <span className="text-[10px] text-rose-600/70">Unfit Applicants</span>
         </div>
 
         <div
@@ -165,11 +224,11 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
           }`}
         >
           <div className="flex items-center justify-between text-amber-700 text-xs font-semibold uppercase mb-1">
-            <span>Under Review</span>
+            <span>Completed / Review</span>
             <Clock className="w-3.5 h-3.5 text-amber-600" />
           </div>
           <div className="text-2xl font-bold font-mono text-amber-600">{underReviewCount}</div>
-          <span className="text-[10px] text-amber-600/70">Pending Final Action</span>
+          <span className="text-[10px] text-amber-600/70">Awaiting Recruiter Call</span>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
@@ -178,7 +237,7 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
             <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />
           </div>
           <div className="text-2xl font-bold font-mono text-[#4285F4]">{avgMatch}%</div>
-          <span className="text-[10px] text-gray-400">JD Requirements</span>
+          <span className="text-[10px] text-gray-400">JD Alignment</span>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
@@ -200,7 +259,7 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search candidate name, role, skills..."
+            placeholder="Search candidate, company, role, skills..."
             className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
           />
         </div>
@@ -227,11 +286,11 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
             onChange={(e) => setSelectedDecision(e.target.value)}
             className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-700 outline-none cursor-pointer focus:border-blue-500"
           >
-            <option value="all">All Decision Statuses</option>
-            <option value="accepted">Accepted Only</option>
-            <option value="rejected">Rejected Only</option>
+            <option value="all">All Statuses</option>
+            <option value="accepted">Accepted / Fit</option>
+            <option value="rejected">Rejected / Unfit</option>
             <option value="under_review">Under Review</option>
-            <option value="completed">Completed (Pending)</option>
+            <option value="completed">Completed Assessment</option>
           </select>
 
           {/* Fit Filter */}
@@ -245,18 +304,6 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
             <option value="moderate">Moderate Fit (70-84%)</option>
             <option value="borderline">Borderline (&lt;70%)</option>
           </select>
-
-          {onLaunchCandidateInterview && filteredApplicants.length > 0 && (
-            <button
-              onClick={() => onLaunchCandidateInterview(filteredApplicants[0])}
-              className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer hover:shadow-sm"
-              title="Launch candidate session for the next applicant in queue"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Next Candidate in Queue</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          )}
 
           {(searchTerm || selectedDepartment !== "all" || selectedDecision !== "all" || selectedFit !== "all") && (
             <button
@@ -281,12 +328,12 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50/80 text-[11px] font-bold uppercase tracking-wider text-gray-500">
                 <th className="py-3.5 px-4 sm:px-6">Candidate</th>
-                <th className="py-3.5 px-4">Applied Job Role</th>
-                <th className="py-3.5 px-4 text-center">Company Requirement Fit %</th>
+                <th className="py-3.5 px-4">Company & Target Role</th>
+                <th className="py-3.5 px-4 text-center">Fit % Match</th>
                 <th className="py-3.5 px-4 text-center">AI Score</th>
                 <th className="py-3.5 px-4 text-center">Integrity Trust</th>
-                <th className="py-3.5 px-4 text-center">Decision Status</th>
-                <th className="py-3.5 px-4 sm:px-6 text-right">Recruiter Actions</th>
+                <th className="py-3.5 px-4 text-center">Recruiter Decision</th>
+                <th className="py-3.5 px-4 sm:px-6 text-right">Recruiter Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-xs">
@@ -295,7 +342,7 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
                   <td colSpan={7} className="py-12 text-center text-gray-400">
                     <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                     <p className="font-semibold text-gray-600">No applicant records found</p>
-                    <p className="text-xs text-gray-400">Try adjusting your filters or search criteria.</p>
+                    <p className="text-xs text-gray-400">Completed assessments from candidate interviews will automatically appear here.</p>
                   </td>
                 </tr>
               ) : (
@@ -313,6 +360,9 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
                       : app.matchPercentage >= 70
                       ? "bg-blue-500"
                       : "bg-amber-500";
+
+                  const isFitDecision = app.decision === "accepted" || app.recruiterFitEvaluation === "Fit";
+                  const isUnfitDecision = app.decision === "rejected" || app.recruiterFitEvaluation === "Unfit";
 
                   return (
                     <tr
@@ -339,11 +389,14 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
                         </div>
                       </td>
 
-                      {/* 2. Applied Job Role */}
+                      {/* 2. Applied Company & Job Role */}
                       <td className="py-4 px-4">
                         <div>
-                          <span className="font-semibold text-gray-800 block">{app.targetRoleName}</span>
-                          <span className="text-[11px] text-gray-500 block">{app.department}</span>
+                          <div className="flex items-center gap-1 text-[11px] font-bold text-blue-700">
+                            <Building2 className="w-3 h-3 text-blue-500" />
+                            <span>{app.companyName || "Google Cloud"}</span>
+                          </div>
+                          <span className="font-semibold text-gray-800 block mt-0.5">{app.targetRoleName}</span>
                           <span className="text-[10px] text-gray-400 block mt-0.5 font-mono">
                             {app.interviewDate} • {app.interviewDuration}
                           </span>
@@ -352,7 +405,7 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
 
                       {/* 3. Match Fit % with Progress Bar */}
                       <td className="py-4 px-4">
-                        <div className="max-w-[150px] mx-auto space-y-1.5">
+                        <div className="max-w-[140px] mx-auto space-y-1.5">
                           <div className="flex items-center justify-between">
                             <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md border ${fitColor}`}>
                               {app.matchPercentage}% Met
@@ -399,31 +452,24 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
 
                       {/* 6. Decision Status */}
                       <td className="py-4 px-4 text-center">
-                        {app.decision === "accepted" && (
+                        {isFitDecision && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold shadow-2xs">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Accepted</span>
+                            <span>Fit (Hire Offer)</span>
                           </span>
                         )}
 
-                        {app.decision === "rejected" && (
+                        {isUnfitDecision && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-bold shadow-2xs">
                             <XCircle className="w-3.5 h-3.5 text-rose-600" />
-                            <span>Rejected</span>
+                            <span>Unfit (Declined)</span>
                           </span>
                         )}
 
-                        {app.decision === "under_review" && (
+                        {!isFitDecision && !isUnfitDecision && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-bold shadow-2xs">
                             <Clock className="w-3.5 h-3.5 text-amber-600" />
-                            <span>Under Review</span>
-                          </span>
-                        )}
-
-                        {app.decision === "completed" && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-bold shadow-2xs">
-                            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Evaluated</span>
+                            <span>Pending Decision</span>
                           </span>
                         )}
                       </td>
@@ -431,37 +477,48 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
                       {/* 7. Action Controls */}
                       <td className="py-4 px-4 sm:px-6 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Accept Button */}
+                          {/* Mark as Fit Button */}
                           <button
                             type="button"
                             onClick={() => handleOpenDecisionModal(app, "accept")}
-                            title="Accept Applicant"
+                            title="Mark as Fit & Extend Offer"
                             className={`p-1.5 sm:px-2.5 sm:py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                              app.decision === "accepted"
+                              isFitDecision
                                 ? "bg-emerald-600 text-white shadow-2xs"
                                 : "bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200"
                             }`}
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Accept</span>
+                            <span className="hidden sm:inline">Fit (Hire)</span>
                           </button>
 
-                          {/* Reject Button */}
+                          {/* Mark as Unfit Button */}
                           <button
                             type="button"
                             onClick={() => handleOpenDecisionModal(app, "reject")}
-                            title="Reject Applicant"
+                            title="Mark as Unfit"
                             className={`p-1.5 sm:px-2.5 sm:py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                              app.decision === "rejected"
+                              isUnfitDecision
                                 ? "bg-rose-600 text-white shadow-2xs"
                                 : "bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200"
                             }`}
                           >
                             <XCircle className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Reject</span>
+                            <span className="hidden sm:inline">Unfit</span>
                           </button>
 
-                          {/* Fit Breakdown / Agent Analysis Button */}
+                          {/* Send Notification Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDecisionModal(app, "send_notification")}
+                            title="Send Recruiter Notification to Candidate"
+                            className="p-1.5 sm:px-2.5 sm:py-1 bg-purple-50 hover:bg-purple-600 text-purple-700 hover:text-white border border-purple-200 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Notify</span>
+                          </button>
+
+                          {/* View Assessment Details */}
                           <button
                             type="button"
                             onClick={() => handleOpenDecisionModal(app, "view_details")}
@@ -471,19 +528,6 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
                             <Eye className="w-3.5 h-3.5 text-gray-500" />
                             <span className="hidden sm:inline">Details</span>
                           </button>
-
-                          {/* Launch Interview / Switch Candidate Button (Admin Only) */}
-                          {onLaunchCandidateInterview && (
-                            <button
-                              type="button"
-                              onClick={() => onLaunchCandidateInterview(app)}
-                              title={`Start Interview for ${app.name}`}
-                              className="p-1.5 sm:px-2.5 sm:py-1 bg-blue-50 hover:bg-[#4285F4] text-[#1a73e8] hover:text-white border border-blue-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
-                            >
-                              <Play className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Interview</span>
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -495,10 +539,10 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
         </div>
       </div>
 
-      {/* 4. Accept / Reject Decision & Evidence Modal */}
+      {/* 4. Accept / Reject / Notify Modal */}
       {activeModalApplicant && modalAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 space-y-5 animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 space-y-5 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-gray-100 pb-4">
               <div className="flex items-center gap-3">
@@ -510,13 +554,15 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
                 <div>
                   <h3 className="text-base font-bold text-gray-900">
                     {modalAction === "accept"
-                      ? `Confirm Candidate Acceptance: ${activeModalApplicant.name}`
+                      ? `Confirm Decision: Mark as Fit (${activeModalApplicant.name})`
                       : modalAction === "reject"
-                      ? `Confirm Candidate Rejection: ${activeModalApplicant.name}`
-                      : `AI Requirement & Fit Breakdown: ${activeModalApplicant.name}`}
+                      ? `Confirm Decision: Mark as Unfit (${activeModalApplicant.name})`
+                      : modalAction === "send_notification"
+                      ? `Send Recruiter Notification to ${activeModalApplicant.name}`
+                      : `Candidate Assessment & Fit Breakdown: ${activeModalApplicant.name}`}
                   </h3>
                   <p className="text-xs text-gray-500">
-                    Applied for {activeModalApplicant.targetRoleName} ({activeModalApplicant.department})
+                    {activeModalApplicant.companyName || "Tech Enterprise"} • {activeModalApplicant.targetRoleName} ({activeModalApplicant.department})
                   </p>
                 </div>
               </div>
@@ -561,72 +607,103 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
               </div>
             </div>
 
-            {/* AI Agent Recommendation & Evidence Summary */}
-            <div className="space-y-3">
-              <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl space-y-1">
-                <span className="text-[10px] font-bold uppercase text-blue-700 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                  VIBE AI Agent Recommendation
-                </span>
-                <p className="text-xs font-semibold text-gray-900">
-                  {activeModalApplicant.aiRecommendation}
-                </p>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  {activeModalApplicant.aiReasoning}
-                </p>
+            {/* Notification dispatch success alert */}
+            {notificationSentSuccess && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-600" />
+                <span>{notificationSentSuccess}</span>
               </div>
+            )}
 
-              {/* Matched vs Unmet Requirements */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl space-y-1.5">
-                  <span className="font-bold text-emerald-900 flex items-center gap-1 text-[11px] uppercase">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    Requirements Satisfied
+            {/* Notification Dispatch Form */}
+            {modalAction === "send_notification" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-xs font-bold text-gray-800">
+                  <Mail className="w-4 h-4 text-purple-600" />
+                  <span>Candidate Notification Message (Delivered to Candidate Portal):</span>
+                </div>
+                <textarea
+                  rows={6}
+                  value={notificationMessage}
+                  onChange={(e) => setNotificationMessage(e.target.value)}
+                  placeholder="Enter message for the candidate regarding their recruitment status..."
+                  className="w-full p-3 bg-gray-50 border border-gray-300 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 font-sans leading-relaxed"
+                />
+                <div className="flex items-center justify-between text-[11px] text-gray-500">
+                  <span>Delivered to: <strong>{activeModalApplicant.email}</strong></span>
+                  <span className="text-purple-600 font-semibold">Real-Time Notification Delivery</span>
+                </div>
+              </div>
+            )}
+
+            {/* AI Agent Recommendation & Evidence Summary */}
+            {modalAction !== "send_notification" && (
+              <div className="space-y-3">
+                <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-blue-700 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                    VIBE AI Technical Synthesis
                   </span>
-                  <ul className="space-y-1 text-gray-700">
-                    {activeModalApplicant.matchedRequirements.map((r, i) => (
-                      <li key={i} className="flex items-start gap-1.5 leading-snug">
-                        <span className="text-emerald-500 font-bold">•</span>
-                        <span>{r}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="text-xs font-semibold text-gray-900">
+                    {activeModalApplicant.aiRecommendation || "Evaluated by Multimodal VIBE AI Agent"}
+                  </p>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    {activeModalApplicant.aiReasoning || "Candidate demonstrated thorough technical mastery across algorithm design and architecture."}
+                  </p>
                 </div>
 
-                <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl space-y-1.5">
-                  <span className="font-bold text-amber-900 flex items-center gap-1 text-[11px] uppercase">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                    Gaps / Unmet Requirements
-                  </span>
-                  <ul className="space-y-1 text-gray-700">
-                    {activeModalApplicant.unmetRequirements.length > 0 ? (
-                      activeModalApplicant.unmetRequirements.map((r, i) => (
+                {/* Matched vs Unmet Requirements */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl space-y-1.5">
+                    <span className="font-bold text-emerald-900 flex items-center gap-1 text-[11px] uppercase">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      Requirements Satisfied
+                    </span>
+                    <ul className="space-y-1 text-gray-700">
+                      {(activeModalApplicant.matchedRequirements || []).map((r, i) => (
                         <li key={i} className="flex items-start gap-1.5 leading-snug">
-                          <span className="text-amber-500 font-bold">•</span>
+                          <span className="text-emerald-500 font-bold">•</span>
                           <span>{r}</span>
                         </li>
-                      ))
-                    ) : (
-                      <li className="text-gray-500 italic">No significant disqualifying gaps detected.</li>
-                    )}
-                  </ul>
-                </div>
-              </div>
-            </div>
+                      ))}
+                    </ul>
+                  </div>
 
-            {/* Recruiter Decision Notes Input (for Accept / Reject) */}
-            {modalAction !== "view_details" && (
-              <div>
-                <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">
-                  Recruiter / Hiring Manager Decision Audit Note
-                </label>
-                <textarea
-                  rows={3}
-                  value={decisionNotesInput}
-                  onChange={(e) => setDecisionNotesInput(e.target.value)}
-                  placeholder="Add specific justification or next steps note..."
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-blue-500 leading-relaxed"
-                />
+                  <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl space-y-1.5">
+                    <span className="font-bold text-amber-900 flex items-center gap-1 text-[11px] uppercase">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                      Gaps / Unmet Requirements
+                    </span>
+                    <ul className="space-y-1 text-gray-700">
+                      {(activeModalApplicant.unmetRequirements || []).length > 0 ? (
+                        activeModalApplicant.unmetRequirements.map((r, i) => (
+                          <li key={i} className="flex items-start gap-1.5 leading-snug">
+                            <span className="text-amber-500 font-bold">•</span>
+                            <span>{r}</span>
+                          </li>
+                        ))
+                      ) : (
+                        <li className="text-gray-500 italic">No significant disqualifying gaps detected.</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Recruiter Decision Notes Input (for Accept / Reject) */}
+                {modalAction !== "view_details" && (
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">
+                      Recruiter Decision & Audit Notes
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={decisionNotesInput}
+                      onChange={(e) => setDecisionNotesInput(e.target.value)}
+                      placeholder="Add specific justification or next steps note..."
+                      className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:border-blue-500 leading-relaxed"
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -642,7 +719,7 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
                 className="text-xs text-[#4285F4] hover:text-[#3367D6] font-semibold flex items-center gap-1 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Run Custom Job Description Gap Analysis</span>
+                <span>Deep Gap Analysis</span>
               </button>
 
               <div className="flex items-center gap-2">
@@ -657,6 +734,17 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
                   Close
                 </button>
 
+                {modalAction === "send_notification" && (
+                  <button
+                    type="button"
+                    onClick={handleSendNotificationSubmit}
+                    className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Send Notification to Candidate</span>
+                  </button>
+                )}
+
                 {modalAction === "accept" && (
                   <button
                     type="button"
@@ -664,7 +752,7 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Confirm Acceptance</span>
+                    <span>Confirm Fit (Hire)</span>
                   </button>
                 )}
 
@@ -675,7 +763,7 @@ export const CandidatePipelineTable: React.FC<CandidatePipelineTableProps> = ({
                     className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <XCircle className="w-3.5 h-3.5" />
-                    <span>Confirm Rejection</span>
+                    <span>Confirm Unfit</span>
                   </button>
                 )}
               </div>

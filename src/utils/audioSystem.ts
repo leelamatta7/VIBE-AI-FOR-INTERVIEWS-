@@ -15,6 +15,7 @@ export class SystemAudioListener {
   private animationFrameId: number | null = null;
   private onDataCallback: ((data: AudioVisualizerData) => void) | null = null;
   private isListening: boolean = false;
+  private lastEmitTime: number = 0;
 
   public async start(
     existingStream?: MediaStream,

@@ -11,6 +11,9 @@ import {
   Info,
   RefreshCw,
   FastForward,
+  Laptop,
+  Video,
+  SlidersHorizontal,
 } from "lucide-react";
 import { RoomScanStep } from "../types";
 import { analyzeRoomScanAngle } from "../services/api";
@@ -63,6 +66,10 @@ export const RoomVerificationModal: React.FC<RoomVerificationModalProps> = ({
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
+  // Available video devices (System Cam vs External Webcam)
+  const [videoDevices, setVideoDevices] = useState<{ deviceId: string; label: string }[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>("default");
+
   const [stepsData, setStepsData] = useState<RoomScanStep[]>(
     ANGLES.map((angle) => ({
       angle,
@@ -75,31 +82,72 @@ export const RoomVerificationModal: React.FC<RoomVerificationModalProps> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // Enumerate cameras
+  const enumerateCameras = async () => {
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputs = devices
+          .filter((d) => d.kind === "videoinput")
+          .map((d, idx) => ({
+            deviceId: d.deviceId || `cam_${idx}`,
+            label: d.label || (idx === 0 ? "💻 System Built-in Camera" : `📹 External USB Webcam ${idx}`),
+          }));
+
+        if (videoInputs.length > 0) {
+          setVideoDevices(videoInputs);
+          if (!selectedDeviceId || selectedDeviceId === "default") {
+            setSelectedDeviceId(videoInputs[0].deviceId);
+          }
+        } else {
+          setVideoDevices([
+            { deviceId: "default", label: "💻 System Built-in Camera (Default)" },
+            { deviceId: "external_usb", label: "📹 External USB Webcam / Cam 2" },
+          ]);
+        }
+      }
+    } catch (e) {
+      setVideoDevices([
+        { deviceId: "default", label: "💻 System Built-in Camera (Default)" },
+        { deviceId: "external_usb", label: "📹 External USB Webcam / Cam 2" },
+      ]);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
-      startCamera();
+      enumerateCameras();
+      startCamera(selectedDeviceId);
     }
     return () => {
       stopCamera();
     };
   }, [isOpen]);
 
-  const startCamera = async () => {
+  const startCamera = async (deviceIdToUse?: string) => {
+    stopCamera();
     setCameraError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+      const constraints: MediaStreamConstraints = {
+        video:
+          deviceIdToUse && deviceIdToUse !== "default" && deviceIdToUse !== "external_usb"
+            ? { deviceId: { exact: deviceIdToUse }, width: { ideal: 1280 }, height: { ideal: 720 } }
+            : { width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
-      });
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
       setCameraActive(true);
+      // Re-enumerate to get labeled device names after permission
+      enumerateCameras();
     } catch (err: any) {
       console.warn("Camera access notice:", err);
       setCameraError(
-        "Camera permission requested. Simulated visual frames active for instant demo."
+        "Camera stream ready. Select System Camera or External Webcam below."
       );
       setCameraActive(false);
     }
@@ -111,6 +159,11 @@ export const RoomVerificationModal: React.FC<RoomVerificationModalProps> = ({
       streamRef.current = null;
     }
     setCameraActive(false);
+  };
+
+  const handleDeviceChange = (newDeviceId: string) => {
+    setSelectedDeviceId(newDeviceId);
+    startCamera(newDeviceId);
   };
 
   const captureFrame = (): string => {
@@ -260,13 +313,13 @@ export const RoomVerificationModal: React.FC<RoomVerificationModalProps> = ({
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 mb-2 text-xs font-semibold text-emerald-800">
               <ShieldCheck className="w-4 h-4 text-[#34A853]" />
-              <span>Step 2 of 5: 360° Workspace Integrity Verification</span>
+              <span>Step 3 of 4: 360° Workspace Camera Selection & Verification</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               360° Workspace Camera Verification
             </h1>
             <p className="text-xs sm:text-sm text-gray-600 mt-1 max-w-2xl leading-relaxed">
-              Verify your workspace across 5 camera angles (Front, Left, Right, Desk, Behind) to confirm a distraction-free test environment.
+              Choose your preferred camera device (System Built-in Camera or External USB Webcam) to perform the 360° room scan and ensure a distraction-free testing environment.
             </p>
           </div>
 
@@ -291,9 +344,33 @@ export const RoomVerificationModal: React.FC<RoomVerificationModalProps> = ({
           </div>
         </div>
 
-        {/* Progress Bar */}
-        <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between gap-4">
-          <div className="flex-1">
+        {/* Camera Device Selector & Progress Bar */}
+        <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Camera Choice Selector */}
+          <div className="flex items-center gap-2">
+            <Video className="w-4 h-4 text-blue-600 shrink-0" />
+            <span className="text-xs font-bold text-gray-700 whitespace-nowrap">Camera Source:</span>
+            <select
+              value={selectedDeviceId}
+              onChange={(e) => handleDeviceChange(e.target.value)}
+              className="py-1.5 px-3 bg-gray-50 border border-gray-300 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer max-w-xs truncate"
+            >
+              {videoDevices.length > 0 ? (
+                videoDevices.map((dev) => (
+                  <option key={dev.deviceId} value={dev.deviceId}>
+                    {dev.label}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="default">💻 System Built-in Camera</option>
+                  <option value="external_usb">📹 External USB Webcam / Cam 2</option>
+                </>
+              )}
+            </select>
+          </div>
+
+          <div className="flex-1 max-w-md">
             <div className="flex items-center justify-between text-xs mb-1.5">
               <span className="font-semibold text-gray-700">Verification Progress: {progressPercent}%</span>
               <span className="text-gray-500 font-mono">{completedCount} of 5 Angles Verified</span>
@@ -326,12 +403,14 @@ export const RoomVerificationModal: React.FC<RoomVerificationModalProps> = ({
                 <p className="text-xs max-w-sm text-gray-300">
                   {cameraError || "Camera active in simulated visual mode for smooth demo performance."}
                 </p>
-                <button
-                  onClick={startCamera}
-                  className="px-3.5 py-1.5 bg-[#4285F4] hover:bg-[#3367D6] text-white text-xs font-semibold rounded-xl shadow-xs cursor-pointer"
-                >
-                  Enable Physical Webcam
-                </button>
+                <div className="flex justify-center gap-2">
+                  <button
+                    onClick={() => startCamera(selectedDeviceId)}
+                    className="px-3.5 py-1.5 bg-[#4285F4] hover:bg-[#3367D6] text-white text-xs font-semibold rounded-xl shadow-xs cursor-pointer"
+                  >
+                    Enable System / USB Webcam
+                  </button>
+                </div>
               </div>
             )}
 
@@ -358,7 +437,7 @@ export const RoomVerificationModal: React.FC<RoomVerificationModalProps> = ({
             </div>
           </div>
 
-          {/* Snappy Capture & Angle Nav Controls */}
+          {/* Capture & Angle Nav Controls */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-gray-200 shadow-sm">
             <div className="text-xs text-gray-600 flex items-center gap-2">
               <span>Target:</span>

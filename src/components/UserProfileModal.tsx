@@ -20,7 +20,6 @@ import {
   Save,
 } from "lucide-react";
 import { CandidateProfile } from "../types";
-import { SAMPLE_CANDIDATES } from "../data/sampleCandidates";
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -40,26 +39,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   if (!isOpen) return null;
-
-  const handleAutofillDemo = (index: number) => {
-    const candidate = SAMPLE_CANDIDATES[index % SAMPLE_CANDIDATES.length].profile;
-    setFormData({
-      ...formData,
-      name: candidate.name,
-      email: candidate.email || "candidate@example.com",
-      phoneNumber: candidate.phoneNumber || "+1 (555) 349-8821",
-      targetRole: candidate.targetRole,
-      experienceYears: candidate.experienceYears,
-      skills: candidate.skills,
-      location: candidate.location || "San Francisco, CA",
-      linkedInUrl: candidate.linkedInUrl || "https://linkedin.com/in/candidate",
-      portfolioUrl: candidate.portfolioUrl || "https://candidate.dev",
-      resumeText: candidate.resumeText,
-      education: candidate.education || [],
-      workExperience: candidate.workExperience || [],
-      avatarUrl: candidate.avatarUrl || "",
-    });
-  };
 
   const handleSave = () => {
     onUpdateProfile(formData);
@@ -104,33 +83,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Quick Demo Fill Dropdown */}
-            <div className="hidden sm:flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span className="text-[11px] font-bold text-gray-600">Demo Fill:</span>
-              <button
-                type="button"
-                onClick={() => handleAutofillDemo(0)}
-                className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold px-1.5 py-0.5 rounded hover:bg-blue-50 cursor-pointer"
-              >
-                Alex
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAutofillDemo(1)}
-                className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold px-1.5 py-0.5 rounded hover:bg-blue-50 cursor-pointer"
-              >
-                Priya
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAutofillDemo(2)}
-                className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold px-1.5 py-0.5 rounded hover:bg-blue-50 cursor-pointer"
-              >
-                Marcus
-              </button>
-            </div>
-
             <button
               onClick={onClose}
               className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"

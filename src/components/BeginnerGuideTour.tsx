@@ -12,6 +12,8 @@ import {
   Globe2,
   Eye,
   Sliders,
+  Layers,
+  Cpu,
 } from "lucide-react";
 
 interface BeginnerGuideTourProps {
@@ -45,10 +47,10 @@ export const BeginnerGuideTour: React.FC<BeginnerGuideTourProps> = ({
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900">
-              Welcome to Gemini AI Video Interviewer!
+              Real-Time AI Technical Interview Platform
             </h2>
             <p className="text-xs text-gray-500">
-              Here is your quick, beginner-friendly roadmap to navigate every feature.
+              Candidate Login: <code className="text-blue-600 font-bold font-mono">leelamatta7@gmail.com</code> | Password: <code className="text-blue-600 font-bold font-mono">12345678</code>
             </p>
           </div>
         </div>
@@ -62,13 +64,10 @@ export const BeginnerGuideTour: React.FC<BeginnerGuideTourProps> = ({
             </div>
             <div>
               <h3 className="text-xs font-bold text-gray-900 flex items-center gap-1.5 uppercase tracking-wider">
-                Resume & Job Description Analysis
-                <span className="text-[10px] bg-blue-100 text-[#1a73e8] px-2 py-0.5 rounded-full font-semibold normal-case tracking-normal">
-                  Instant Samples Available
-                </span>
+                Real-Time Profile & Job Description Fit
               </h3>
               <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                Click <strong>"Load Sample Candidate"</strong> to immediately populate candidate details, skills, and target job description. Gemini automatically matches qualifications and crafts a tailored interview roadmap.
+                Configure your verified candidate credentials, target engineering role, experience, and skills. The platform analyzes qualification fit and customizes an adaptive interview agenda.
               </p>
             </div>
           </div>
@@ -84,50 +83,63 @@ export const BeginnerGuideTour: React.FC<BeginnerGuideTourProps> = ({
                 360° Workspace Camera Verification
               </h3>
               <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                Before the interview starts, the system guides you to scan 5 angles (Front, Left, Right, Desk, Behind). AI computer vision verifies an uncluttered, authorized workspace.
+                Before the interview starts, the system scans 5 angles (Front, Left, Right, Desk, Behind) to confirm a compliant, clean testing workspace.
               </p>
             </div>
           </div>
 
           {/* Step 3 */}
           <div className="flex items-start space-x-3.5 p-3.5 rounded-xl bg-gray-50 border border-gray-200">
-            <div className="w-8 h-8 rounded-lg bg-red-50 border border-red-200 text-[#EA4335] flex items-center justify-center font-bold text-xs shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold text-xs shrink-0">
               3
             </div>
             <div>
               <h3 className="text-xs font-bold text-gray-900 flex items-center gap-1.5 uppercase tracking-wider">
-                <Video className="w-4 h-4 text-[#EA4335]" />
-                Interactive Video Meeting & Speech
-                <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold normal-case tracking-normal">
-                  Multilingual
-                </span>
+                <Layers className="w-4 h-4 text-indigo-600" />
+                LiveKit / Pipecat & WebRTC Real-Time Media Streams
               </h3>
               <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                Experience a natural video call with the AI avatar. Speak into your microphone in <strong>English, Hindi (हिंदी), or mixed Hinglish</strong>. The AI detects your language in real time and speaks back with voice output!
+                Bi-directional WebRTC audio/video feeds, sub-50ms Voice Activity Detection (VAD), and natural interruption handling.
               </p>
             </div>
           </div>
 
           {/* Step 4 */}
           <div className="flex items-start space-x-3.5 p-3.5 rounded-xl bg-gray-50 border border-gray-200">
-            <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center font-bold text-xs shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-purple-50 border border-purple-200 text-purple-600 flex items-center justify-center font-bold text-xs shrink-0">
               4
             </div>
             <div>
               <h3 className="text-xs font-bold text-gray-900 flex items-center gap-1.5 uppercase tracking-wider">
-                <Eye className="w-4 h-4 text-amber-600" />
-                Silent Device & Monocular Depth Proximity Detection
+                <Video className="w-4 h-4 text-purple-600" />
+                Anam AI / HeyGen / D-ID Avatar & Viseme Lip-Sync
               </h3>
               <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                The vision engine silently scans video frames for nearby mobile phones, laptops, or extra people using bounding boxes and <span className="font-semibold text-amber-800">&lt;3-foot proximity estimation</span>. <em>Crucially, it never interrupts the candidate</em>; all events are silently logged for HR review.
+                Neural AI interviewer avatar with audio-reactive visemes, natural eye-blinks, adaptive head tilts, and multi-provider rendering.
               </p>
             </div>
           </div>
 
           {/* Step 5 */}
           <div className="flex items-start space-x-3.5 p-3.5 rounded-xl bg-gray-50 border border-gray-200">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 text-[#4285F4] flex items-center justify-center font-bold text-xs shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center font-bold text-xs shrink-0">
               5
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-gray-900 flex items-center gap-1.5 uppercase tracking-wider">
+                <Cpu className="w-4 h-4 text-amber-600" />
+                Vapi / Retell AI Unified Orchestration
+              </h3>
+              <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                Unified STT, Gemini LLM reasoning, and neural TTS synthesis with real-time latency telemetry.
+              </p>
+            </div>
+          </div>
+
+          {/* Step 6 */}
+          <div className="flex items-start space-x-3.5 p-3.5 rounded-xl bg-gray-50 border border-gray-200">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 text-[#4285F4] flex items-center justify-center font-bold text-xs shrink-0">
+              6
             </div>
             <div>
               <h3 className="text-xs font-bold text-gray-900 flex items-center gap-1.5 uppercase tracking-wider">
@@ -135,23 +147,7 @@ export const BeginnerGuideTour: React.FC<BeginnerGuideTourProps> = ({
                 Live Coding Sandbox & Test Runner
               </h3>
               <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                Click <strong>"Live Code"</strong> to solve real algorithmic coding challenges in JavaScript or Python. Execute code against test suites and receive immediate AI complexity analysis ($O(N)$) and follow-up probes.
-              </p>
-            </div>
-          </div>
-
-          {/* Step 6 */}
-          <div className="flex items-start space-x-3.5 p-3.5 rounded-xl bg-gray-50 border border-gray-200">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-[#34A853] flex items-center justify-center font-bold text-xs shrink-0">
-              6
-            </div>
-            <div>
-              <h3 className="text-xs font-bold text-gray-900 flex items-center gap-1.5 uppercase tracking-wider">
-                <Award className="w-4 h-4 text-[#34A853]" />
-                Evidence-Based Final Assessment & HR Audit
-              </h3>
-              <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                At the conclusion, receive a comprehensive evaluation: Technical Knowledge, Problem Solving, Coding, Debugging, and Communication, with observable citations, constructive improvement feedback, and downloadable PDF reports.
+                Solve live coding problems with real test-case execution, complexity analysis ($O(N)$), and interactive debugging probes.
               </p>
             </div>
           </div>
@@ -163,7 +159,7 @@ export const BeginnerGuideTour: React.FC<BeginnerGuideTourProps> = ({
             onClick={onClose}
             className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
           >
-            I'll Explore on My Own
+            Close Guide
           </button>
           <button
             onClick={() => {
@@ -172,7 +168,7 @@ export const BeginnerGuideTour: React.FC<BeginnerGuideTourProps> = ({
             }}
             className="px-5 py-2.5 bg-[#4285F4] hover:bg-[#3367D6] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors flex items-center space-x-2 cursor-pointer"
           >
-            <span>Launch Quick 1-Click Demo</span>
+            <span>Proceed to Interview Setup</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

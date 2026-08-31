@@ -2,274 +2,153 @@ import { CompanyJobRole, ApplicantRecord } from "../types";
 
 export const INITIAL_JOB_ROLES: CompanyJobRole[] = [
   {
-    id: "role_fullstack_sr",
-    title: "Senior Full-Stack Engineer",
-    department: "Core Platform Engineering",
-    location: "San Francisco, CA (Hybrid / Remote)",
+    id: "role_google_cloud_sr",
+    companyName: "Google Cloud",
+    companyLogo: "https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=100&auto=format&fit=crop&q=80",
+    companyIndustry: "Cloud Computing & AI",
+    title: "Senior Full-Stack Cloud Engineer",
+    department: "Cloud Platform Infrastructure",
+    location: "Sunnyvale, CA (Hybrid / Remote)",
+    employmentType: "Full-time",
     experienceRequired: "4+ Years",
-    skillsRequired: ["TypeScript", "React", "Node.js", "PostgreSQL", "System Design", "Docker"],
+    skillsRequired: ["TypeScript", "React", "Node.js", "PostgreSQL", "Google Cloud", "Distributed Systems", "Docker"],
     minMatchThreshold: 75,
-    salaryRange: "$150,000 - $185,000 / yr",
-    jobDescription: `We are looking for a Senior Full Stack Engineer to lead core product engineering.
+    salaryRange: "$165,000 - $205,000 / yr",
+    jobDescription: `Google Cloud is looking for a Senior Full-Stack Cloud Engineer to design next-generation developer tooling and resilient microservices.
+Key Responsibilities:
+- Build high-throughput full-stack platforms using modern TypeScript, React, and Node.js backend services.
+- Architect low-latency distributed APIs, Redis caching layers, and optimized PostgreSQL databases.
+- Integrate cloud infrastructure with GCP Cloud Run, Pub/Sub, and zero-trust IAM policies.
+- Collaborate with AI and system design teams to deliver scalable enterprise products.
 Requirements:
-- 4+ years of professional experience in TypeScript, React, and Node.js backend services.
-- Deep algorithmic knowledge and ability to design scalable, secure RESTful & GraphQL APIs.
-- Experience with relational databases (PostgreSQL), schema optimization, and caching (Redis).
-- Proven track record building resilient cloud services and microservices architecture.
-- Strong verbal and written communication skills with ability to articulate tradeoffs clearly.`,
-    createdAt: "2026-08-15",
-    applicantsCount: 6,
+- 4+ years building production-grade web systems and distributed services.
+- Deep expertise in frontend architecture, database schema design, and asynchronous event streams.
+- Passion for software craftsmanship, unit test rigor, and robust automated deployments.`,
+    createdAt: "2026-08-25",
+    applicantsCount: 0,
     status: "active",
   },
   {
-    id: "role_ai_backend",
-    title: "AI Backend & Systems Engineer",
-    department: "AI Research & Core",
-    location: "Bengaluru, India / Remote US",
-    experienceRequired: "3+ Years",
-    skillsRequired: ["Python", "FastAPI", "Gemini API", "LLM Tooling", "Vector Search", "Cloud Run"],
-    minMatchThreshold: 80,
-    salaryRange: "$140,000 - $170,000 / yr",
-    jobDescription: `Seeking an AI Backend Engineer to architect production generative AI pipelines and tool calling workflows.
-Requirements:
-- 3+ years experience in Python, FastAPI, and asynchronous server architectures.
-- Hands-on experience integrating LLM APIs (e.g., Google Gemini, multimodal processing, function calling).
-- Knowledge of vector databases (pgvector, ChromaDB), embeddings, and semantic retrieval.
-- Familiarity with containerized deployments (Docker, Kubernetes, GCP Cloud Run).`,
-    createdAt: "2026-08-20",
-    applicantsCount: 4,
-    status: "active",
-  },
-  {
-    id: "role_frontend_arch",
-    title: "Lead Frontend Architect",
-    department: "User Experience & Web",
-    location: "Seattle, WA (Remote Eligible)",
+    id: "role_stripe_core",
+    companyName: "Stripe",
+    companyLogo: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=100&auto=format&fit=crop&q=80",
+    companyIndustry: "Financial Infrastructure",
+    title: "Staff Backend Infrastructure Engineer",
+    department: "Global Payments & Core Ledgers",
+    location: "San Francisco, CA / Remote",
+    employmentType: "Full-time",
     experienceRequired: "5+ Years",
-    skillsRequired: ["React 19", "Next.js", "Tailwind CSS", "Web Performance", "State Management", "Jest"],
-    minMatchThreshold: 70,
-    salaryRange: "$155,000 - $190,000 / yr",
-    jobDescription: `Looking for a Frontend Architect to shape the next generation of our enterprise web apps.
+    skillsRequired: ["Go / Python / Node.js", "PostgreSQL", "Kafka", "Distributed Systems", "Idempotency", "Redis"],
+    minMatchThreshold: 80,
+    salaryRange: "$180,000 - $225,000 / yr",
+    jobDescription: `Join Stripe to build the economic infrastructure of the internet.
+Key Responsibilities:
+- Architect mission-critical payment ledger pipelines with 99.999% availability and strict idempotency guarantees.
+- Design resilient event-driven message queues and transactional consensus systems.
+- Optimize database write paths and partition high-scale PostgreSQL shards.
 Requirements:
-- 5+ years building complex, highly responsive single-page applications and design systems in React.
-- Deep mastery of web performance optimization (Core Web Vitals, SSR, streaming rendering).
-- Proficiency in modern CSS/Tailwind, accessibility (WCAG 2.1 AA), and state orchestration.
-- Experience writing automated unit and integration tests with Jest/Playwright.`,
-    createdAt: "2026-08-10",
-    applicantsCount: 3,
+- 5+ years building high-reliability backend systems.
+- Deep understanding of distributed transactions, concurrency control, and failure recovery.`,
+    createdAt: "2026-08-26",
+    applicantsCount: 0,
     status: "active",
   },
   {
-    id: "role_cloud_devops",
-    title: "Staff Cloud DevOps & SRE Lead",
-    department: "Infrastructure & Security",
-    location: "Austin, TX / Remote",
-    experienceRequired: "6+ Years",
-    skillsRequired: ["Kubernetes", "Terraform", "GCP", "CI/CD", "Prometheus", "SOC-2 Compliance"],
+    id: "role_openai_sys",
+    companyName: "OpenAI",
+    companyLogo: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80",
+    companyIndustry: "Generative Artificial Intelligence",
+    title: "Staff AI Systems & Agentic Runtime Engineer",
+    department: "Applied AI Research",
+    location: "San Francisco, CA / Remote",
+    employmentType: "Full-time",
+    experienceRequired: "5+ Years",
+    skillsRequired: ["Python", "FastAPI", "Gemini / LLM Tooling", "PyTorch", "pgvector", "WebSockets", "Cloud Run"],
     minMatchThreshold: 80,
-    salaryRange: "$175,000 - $210,000 / yr",
-    jobDescription: `Seeking a Staff Site Reliability Engineer to oversee multi-region cloud infrastructure, automated CI/CD pipelines, and zero-trust security postures.
+    salaryRange: "$200,000 - $250,000 / yr",
+    jobDescription: `Work on cutting-edge autonomous agents and real-time multimodal model serving architectures.
+Key Responsibilities:
+- Build low-latency agent execution runtimes, streaming tool calling frameworks, and vector search systems.
+- Optimize real-time multimodal inference pipelines with WebSockets and WebRTC streaming.
+- Integrate automated benchmark evaluators and memory persistence layers.
 Requirements:
-- 6+ years managing large-scale Kubernetes clusters and infrastructure-as-code (Terraform).
-- Deep knowledge of Google Cloud Platform (GCP) or AWS networking, IAM, and secret management.
-- Experience with real-time observability, SLOs, distributed tracing, and automated incident response.`,
-    createdAt: "2026-08-01",
-    applicantsCount: 2,
+- 5+ years developing backend architectures and LLM application infrastructure.
+- Experience with low-latency streaming protocols and asynchronous pipelines.`,
+    createdAt: "2026-08-27",
+    applicantsCount: 0,
+    status: "active",
+  },
+  {
+    id: "role_microsoft_fe",
+    companyName: "Microsoft",
+    companyLogo: "https://images.unsplash.com/photo-1583321500900-82807e458f3c?w=100&auto=format&fit=crop&q=80",
+    companyIndustry: "Enterprise Software & Cloud",
+    title: "Principal Frontend Design System Architect",
+    department: "Developer Division & Modern Web",
+    location: "Redmond, WA / Remote",
+    employmentType: "Full-time",
+    experienceRequired: "6+ Years",
+    skillsRequired: ["React 19", "TypeScript", "Tailwind CSS", "Web Performance", "State Management", "WCAG 2.1"],
+    minMatchThreshold: 75,
+    salaryRange: "$175,000 - $215,000 / yr",
+    jobDescription: `Architect high-performance, accessible enterprise web applications serving millions of global developers.
+Key Responsibilities:
+- Lead the architectural vision for complex React single-page applications and component design systems.
+- Benchmark and optimize Core Web Vitals, memory footprints, and bundle streaming.
+- Drive accessibility (WCAG 2.1 AA) and responsive design standards across cross-functional teams.
+Requirements:
+- 6+ years specializing in modern React, TypeScript, and large-scale web architecture.`,
+    createdAt: "2026-08-28",
+    applicantsCount: 0,
+    status: "active",
+  },
+  {
+    id: "role_databricks_data",
+    companyName: "Databricks",
+    companyLogo: "https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=100&auto=format&fit=crop&q=80",
+    companyIndustry: "Data & AI Lakehouse",
+    title: "Senior Distributed Systems & Platform Engineer",
+    department: "Lakehouse Compute Engine",
+    location: "Mountain View, CA / Remote",
+    employmentType: "Full-time",
+    experienceRequired: "4+ Years",
+    skillsRequired: ["C++ / Rust / Go", "Distributed Computing", "Kubernetes", "Linux Kernel", "gRPC"],
+    minMatchThreshold: 80,
+    salaryRange: "$170,000 - $210,000 / yr",
+    jobDescription: `Build high-throughput distributed compute query execution kernels and cloud infrastructure.
+Key Responsibilities:
+- Optimize distributed memory management, network serialization, and disk I/O.
+- Scale multi-tenant Kubernetes worker clusters and telemetry pipelines.
+Requirements:
+- 4+ years working on distributed systems or kernel-level optimization.`,
+    createdAt: "2026-08-29",
+    applicantsCount: 0,
+    status: "active",
+  },
+  {
+    id: "role_netflix_edge",
+    companyName: "Netflix",
+    companyLogo: "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=100&auto=format&fit=crop&q=80",
+    companyIndustry: "Streaming Media & Entertainment",
+    title: "Senior Edge & Media Streaming Engineer",
+    department: "Playback & Delivery Ecosystem",
+    location: "Los Gatos, CA / Remote",
+    employmentType: "Full-time",
+    experienceRequired: "4+ Years",
+    skillsRequired: ["WebRTC", "TypeScript", "Video Codecs", "Edge CDN", "Node.js", "Observability"],
+    minMatchThreshold: 75,
+    salaryRange: "$190,000 - $240,000 / yr",
+    jobDescription: `Deliver seamless, bufferless video and real-time interactive media experiences to 250M+ global members.
+Key Responsibilities:
+- Build low-latency WebRTC and adaptive bitrate streaming pipelines.
+- Implement telemetry collectors tracking edge network round-trip time and frame drops.
+Requirements:
+- 4+ years building media streaming or real-time networking systems.`,
+    createdAt: "2026-08-30",
+    applicantsCount: 0,
     status: "active",
   },
 ];
 
-export const INITIAL_APPLICANTS: ApplicantRecord[] = [
-  {
-    id: "app_aarav_sharma",
-    name: "Aarav Sharma",
-    email: "aarav.sharma@gemini.ai",
-    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80",
-    targetRoleId: "role_fullstack_sr",
-    targetRoleName: "Senior Full-Stack Engineer",
-    department: "Core Platform Engineering",
-    interviewDate: "Aug 28, 2026",
-    interviewDuration: "34 mins",
-    experienceYears: 5,
-    matchPercentage: 94,
-    fitStatus: "Strong Fit",
-    overallScore: 92,
-    integrityScore: 98,
-    decision: "accepted",
-    decisionNotes: "Exceptional architecture breakdown during live interview. Solved LRU Cache problem optimally and verified 100% clean 360 workspace.",
-    decisionTimestamp: "2026-08-28T16:45:00Z",
-    proctoringFlags: 0,
-    skills: ["TypeScript", "React", "Node.js", "PostgreSQL", "Redis", "Distributed Systems"],
-    resumeSummary: "5+ years developing high-scale cloud platforms; built real-time pub/sub system handling 15k req/s with TypeScript and Postgres.",
-    matchedRequirements: [
-      "5+ years exceeding 4 year minimum requirement in TypeScript & Node.js",
-      "Demonstrated deep knowledge of relational databases and Redis caching",
-      "Passed all algorithmic test cases with optimal O(1) time complexity",
-      "High communication clarity and architectural trade-off formulation",
-    ],
-    unmetRequirements: [
-      "Limited direct exposure to GraphQL compared to REST endpoints",
-    ],
-    aiRecommendation: "Strong Hire — Fast-track to Offer Stage",
-    aiReasoning: "Candidate demonstrates top 5% technical fluency in system design and clean code generation. Gaze and audio proctoring verified zero suspicious telemetry.",
-  },
-  {
-    id: "app_priya_patel",
-    name: "Priya Patel",
-    email: "priya.patel@gemini.ai",
-    avatarUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&auto=format&fit=crop&q=80",
-    targetRoleId: "role_frontend_arch",
-    targetRoleName: "Lead Frontend Architect",
-    department: "User Experience & Web",
-    interviewDate: "Aug 27, 2026",
-    interviewDuration: "28 mins",
-    experienceYears: 4,
-    matchPercentage: 88,
-    fitStatus: "Fit",
-    overallScore: 89,
-    integrityScore: 96,
-    decision: "under_review",
-    decisionNotes: "High-caliber UI design system knowledge. Evaluating seniority fit vs 5+ yr requirement.",
-    decisionTimestamp: "2026-08-27T14:20:00Z",
-    proctoringFlags: 1,
-    skills: ["React 19", "Next.js", "Tailwind CSS", "Web Performance", "Jest", "TypeScript"],
-    resumeSummary: "4 years building enterprise design systems; optimized Core Web Vitals resulting in 45% bundle reduction and Lighthouse 98.",
-    matchedRequirements: [
-      "Expert understanding of React lifecycle and component performance optimization",
-      "Proven mastery in Tailwind CSS, design tokens, and accessibility (WCAG AA)",
-      "Strong testing rigor with automated Jest and Playwright coverage",
-    ],
-    unmetRequirements: [
-      "Has 4 years total professional experience against the 5+ year target",
-    ],
-    aiRecommendation: "Hire / Schedule Team Discussion",
-    aiReasoning: "Strong technical candidate whose performance metrics surpass typical 5-year requirements despite slight tenure gap.",
-  },
-  {
-    id: "app_rohan_verma",
-    name: "Rohan Verma",
-    email: "rohan.verma@gemini.ai",
-    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80",
-    targetRoleId: "role_ai_backend",
-    targetRoleName: "AI Backend & Systems Engineer",
-    department: "AI Research & Core",
-    interviewDate: "Aug 26, 2026",
-    interviewDuration: "31 mins",
-    experienceYears: 3,
-    matchPercentage: 91,
-    fitStatus: "Strong Fit",
-    overallScore: 90,
-    integrityScore: 95,
-    decision: "accepted",
-    decisionNotes: "Strong command of Gemini function calling and vector embeddings with pgvector.",
-    decisionTimestamp: "2026-08-26T18:10:00Z",
-    proctoringFlags: 1,
-    skills: ["Python", "FastAPI", "Gemini API", "pgvector", "Docker", "LangChain"],
-    resumeSummary: "3 years developing generative AI backends and semantic retrieval pipelines serving 1.2M queries daily.",
-    matchedRequirements: [
-      "Demonstrated direct mastery of Python, FastAPI, and asynchronous event loops",
-      "Integrated Gemini API multimodal tools and structured JSON responses",
-      "Clear knowledge of vector embeddings and cosine similarity indexing",
-    ],
-    unmetRequirements: [
-      "Less experience in multi-region Kubernetes cluster autoscaling",
-    ],
-    aiRecommendation: "Strong Hire",
-    aiReasoning: "Candidate completed all code benchmarks with clean modular Python syntax and high-speed execution.",
-  },
-  {
-    id: "app_elena_rostova",
-    name: "Elena Rostova",
-    email: "elena.rostova@techcloud.io",
-    avatarUrl: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&auto=format&fit=crop&q=80",
-    targetRoleId: "role_cloud_devops",
-    targetRoleName: "Staff Cloud DevOps & SRE Lead",
-    department: "Infrastructure & Security",
-    interviewDate: "Aug 25, 2026",
-    interviewDuration: "26 mins",
-    experienceYears: 7,
-    matchPercentage: 86,
-    fitStatus: "Fit",
-    overallScore: 85,
-    integrityScore: 100,
-    decision: "completed",
-    decisionNotes: "Pending hiring manager review for multi-cloud budget allocation.",
-    proctoringFlags: 0,
-    skills: ["Kubernetes", "Terraform", "GCP", "Prometheus", "CI/CD", "Security"],
-    resumeSummary: "7 years managing multi-region Kubernetes clusters with 99.99% uptime and zero-trust IAM policies.",
-    matchedRequirements: [
-      "Exceeds required 6+ years experience in Kubernetes & Terraform",
-      "Expert knowledge of GCP service mesh and Prometheus monitoring",
-      "Flawless proctoring record with zero suspicious telemetry flags",
-    ],
-    unmetRequirements: [
-      "Limited direct experience with AWS compared to GCP cloud services",
-    ],
-    aiRecommendation: "Hire",
-    aiReasoning: "Dependable senior infrastructure lead with rigorous security practices.",
-  },
-  {
-    id: "app_david_kim",
-    name: "David Kim",
-    email: "david.kim.engineer@devmail.com",
-    avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80",
-    targetRoleId: "role_fullstack_sr",
-    targetRoleName: "Senior Full-Stack Engineer",
-    department: "Core Platform Engineering",
-    interviewDate: "Aug 24, 2026",
-    interviewDuration: "22 mins",
-    experienceYears: 2,
-    matchPercentage: 58,
-    fitStatus: "Borderline",
-    overallScore: 64,
-    integrityScore: 88,
-    decision: "rejected",
-    decisionNotes: "Candidate struggled with database concurrency and distributed lock concepts. Junior experience level for a Senior opening.",
-    decisionTimestamp: "2026-08-24T11:30:00Z",
-    proctoringFlags: 3,
-    skills: ["JavaScript", "HTML/CSS", "Express", "MongoDB", "Basic React"],
-    resumeSummary: "2 years building entry-level web applications with MERN stack.",
-    matchedRequirements: [
-      "Understands basic JavaScript and Express routing",
-      "Completed junior coding exercises",
-    ],
-    unmetRequirements: [
-      "Missing required 4+ years senior architectural experience",
-      "Failed to explain PostgreSQL index types and connection pooling",
-      "Multiple tab switch alerts flagged during coding assessment",
-    ],
-    aiRecommendation: "Do Not Hire for Senior Role / Consider for Junior Track",
-    aiReasoning: "Significant experience gap for senior responsibilities and multiple integrity tab-switch warnings.",
-  },
-  {
-    id: "app_sophia_martinez",
-    name: "Sophia Martinez",
-    email: "sophia.m.code@cloudspace.org",
-    avatarUrl: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80",
-    targetRoleId: "role_frontend_arch",
-    targetRoleName: "Lead Frontend Architect",
-    department: "User Experience & Web",
-    interviewDate: "Aug 23, 2026",
-    interviewDuration: "29 mins",
-    experienceYears: 5,
-    matchPercentage: 79,
-    fitStatus: "Fit",
-    overallScore: 82,
-    integrityScore: 94,
-    decision: "under_review",
-    decisionNotes: "Good UI component modularity. Testing portfolio projects.",
-    decisionTimestamp: "2026-08-23T15:00:00Z",
-    proctoringFlags: 1,
-    skills: ["React", "Vue.js", "TypeScript", "SCSS", "Webpack", "Cypress"],
-    resumeSummary: "5 years building responsive web frontends in React and Vue.js with comprehensive Cypress test suites.",
-    matchedRequirements: [
-      "Met 5+ years experience target in web application engineering",
-      "Proficient in TypeScript, component design, and automated UI testing",
-    ],
-    unmetRequirements: [
-      "Less familiarity with React 19 server components and Tailwind CSS",
-    ],
-    aiRecommendation: "Hire / Conditional Technical Round",
-    aiReasoning: "Solid engineering fundamentals with minor framework transition required.",
-  },
-];
+// Active pipeline initialized with live candidate sessions (no mocked/seeded fake data)
+export const INITIAL_APPLICANTS: ApplicantRecord[] = [];

@@ -69,6 +69,7 @@ export interface CandidateProfile {
   githubUrl?: string;
   portfolioUrl?: string;
   targetRole: string;
+  targetCompany?: string;
   skills: string;
   experienceYears: number;
   expectedSalary?: string;
@@ -106,11 +107,52 @@ export interface DetectedObject {
   proximityWarning?: boolean;
 }
 
+export interface MultimodalInterviewStepResponse {
+  candidate_verbal_response: string;
+  silent_proctoring_log: {
+    suspicious_activity_detected: boolean;
+    evidence_description: string;
+    confidence_score: number;
+  };
+  performance_analysis: {
+    communication_clarity: string;
+    technical_understanding: string;
+    running_score_out_of_10: number;
+  };
+}
+
+export interface CameraFrameAnalysisResponse {
+  personDetected: boolean;
+  multiplePeopleDetected: boolean;
+  detectedObjects: {
+    label: string;
+    confidence: number;
+    boundingBox?: { ymin: number; xmin: number; ymax: number; xmax: number };
+    location?: string;
+    estimatedDistance?: string;
+    proximityWarning?: boolean;
+  }[];
+  eyeGazeAnalysis?: {
+    lookingAtScreen: boolean;
+    gazeDirection: string;
+    frequentGazeDeviationDetected: boolean;
+    confidence: number;
+  };
+  monocularDepthEstimate: {
+    closestSuspiciousObject: string | null;
+    estimatedDistanceFeet: number;
+    within3FeetZone: boolean;
+  };
+  overallRiskLevel: "safe" | "low" | "medium" | "high";
+  incidentDescription?: string;
+  summaryNotes: string;
+}
+
 export interface ProctoringEvent {
   id: string;
   timestamp: number;
   timeFormatted: string;
-  eventType: "device_detected" | "multiple_people" | "no_face" | "monocular_depth_proximity" | "unauthorized_screen" | "suspicious_audio" | "talview_gaze_drift" | "tab_blur";
+  eventType: "device_detected" | "multiple_people" | "no_face" | "monocular_depth_proximity" | "unauthorized_screen" | "suspicious_audio" | "talview_gaze_drift" | "gaze_deviation" | "tab_blur";
   objectName: string;
   confidence: number;
   proximityScore: "close (<3ft)" | "medium (3-6ft)" | "far (>6ft)";
@@ -215,9 +257,13 @@ export interface ProductUpdate {
 
 export interface CompanyJobRole {
   id: string;
+  companyName: string;
+  companyLogo?: string;
+  companyIndustry?: string;
   title: string;
   department: string;
   location: string;
+  employmentType?: "Full-time" | "Contract" | "Remote" | "Hybrid";
   experienceRequired: string;
   skillsRequired: string[];
   minMatchThreshold: number;
@@ -230,11 +276,25 @@ export interface CompanyJobRole {
 
 export type ApplicantDecision = "accepted" | "rejected" | "under_review" | "completed";
 
+export interface CandidateNotification {
+  id: string;
+  candidateEmail: string;
+  candidateName: string;
+  companyName: string;
+  roleName: string;
+  status: "fit_offer" | "unfit_rejected" | "under_review";
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+}
+
 export interface ApplicantRecord {
   id: string;
   name: string;
   email: string;
   avatarUrl?: string;
+  companyName?: string;
   targetRoleId: string;
   targetRoleName: string;
   department: string;
@@ -248,6 +308,10 @@ export interface ApplicantRecord {
   decision: ApplicantDecision;
   decisionNotes?: string;
   decisionTimestamp?: string;
+  recruiterFitEvaluation?: "Fit" | "Unfit" | "Pending Decision";
+  notificationSent?: boolean;
+  notificationTimestamp?: string;
+  notificationContent?: string;
   proctoringFlags: number;
   skills: string[];
   resumeSummary: string;
@@ -256,6 +320,8 @@ export interface ApplicantRecord {
   aiRecommendation: string;
   aiReasoning: string;
   appliedJobDescription?: string;
+  finalAssessment?: FinalAssessment;
+  conversationHistory?: ConversationTurn[];
 }
 
 export interface JobFitAnalysisResult {

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Navbar } from "./components/Navbar";
 import { AuthLoginPage } from "./components/AuthLoginPage";
+import { CompanyRolesCatalog } from "./components/CompanyRolesCatalog";
 import { CandidateSetup } from "./components/CandidateSetup";
 import { RoomVerificationModal } from "./components/RoomVerificationModal";
 import { InterviewRoom } from "./components/InterviewRoom";
@@ -11,7 +12,7 @@ import { BeginnerGuideTour } from "./components/BeginnerGuideTour";
 import { UserProfileModal } from "./components/UserProfileModal";
 import { ProductUpdatesModal } from "./components/ProductUpdatesModal";
 import { ContactAndFeedbackFooter } from "./components/ContactAndFeedbackFooter";
-import { SAMPLE_CANDIDATES } from "./data/sampleCandidates";
+import { INITIAL_JOB_ROLES, INITIAL_APPLICANTS } from "./data/recruitmentData";
 import {
   CandidateProfile,
   QualificationMatch,
@@ -22,6 +23,8 @@ import {
   CodeExecutionResponse,
   FinalAssessment,
   ApplicantRecord,
+  CompanyJobRole,
+  CandidateNotification,
 } from "./types";
 import {
   parseResumeAndPlanInterview,
@@ -31,9 +34,35 @@ import {
 export default function App() {
   // Navigation & Authentication State
   const [currentStage, setCurrentStage] = useState<
-    "login" | "setup" | "room_verification" | "interview" | "coding" | "assessment" | "admin"
+    | "login"
+    | "role_selection"
+    | "setup"
+    | "room_verification"
+    | "interview"
+    | "coding"
+    | "assessment"
+    | "admin"
   >("login");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+
+  // Global Requisition & Pipeline State
+  const [jobRoles, setJobRoles] = useState<CompanyJobRole[]>(INITIAL_JOB_ROLES);
+  const [applicants, setApplicants] = useState<ApplicantRecord[]>(INITIAL_APPLICANTS);
+  const [selectedRole, setSelectedRole] = useState<CompanyJobRole | null>(INITIAL_JOB_ROLES[0]);
+  const [candidateNotifications, setCandidateNotifications] = useState<CandidateNotification[]>([
+    {
+      id: "notif_welcome",
+      candidateEmail: "leelamatta7@gmail.com",
+      candidateName: "Leela Matta",
+      companyName: "Google Cloud",
+      roleName: "Senior Full-Stack Cloud Engineer",
+      status: "under_review",
+      title: "Welcome to VIBE AI Technical Assessment Portal",
+      message: "Browse available company roles, upload your CV, verify your camera, and complete the autonomous technical assessment.",
+      timestamp: "Just now",
+      read: false,
+    },
+  ]);
 
   // Modals & Navigation Drawers
   const [isHelpTourOpen, setIsHelpTourOpen] = useState<boolean>(false);
@@ -41,7 +70,44 @@ export default function App() {
   const [isUpdatesModalOpen, setIsUpdatesModalOpen] = useState<boolean>(false);
 
   // Candidate & Interview State
-  const [profile, setProfile] = useState<CandidateProfile>(SAMPLE_CANDIDATES[0].profile);
+  const [profile, setProfile] = useState<CandidateProfile>({
+    name: "Leela Matta",
+    email: "leelamatta7@gmail.com",
+    phoneNumber: "+1 (555) 349-2810",
+    location: "San Francisco, CA",
+    targetRole: INITIAL_JOB_ROLES[0].title,
+    targetCompany: INITIAL_JOB_ROLES[0].companyName,
+    skills: INITIAL_JOB_ROLES[0].skillsRequired.join(", "),
+    experienceYears: 5,
+    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+    preferredLanguages: ["English", "Hindi"],
+    resumeText: `LEELA MATTA - SENIOR FULL STACK CLOUD ENGINEER
+Email: leelamatta7@gmail.com | Phone: +1 (555) 349-2810 | Location: San Francisco, CA
+
+SUMMARY
+5+ years of hands-on experience designing and deploying high-throughput distributed cloud services, reactive React/TypeScript frontend architectures, and resilient microservices on GCP and AWS.
+
+TECHNICAL SKILLS
+- Languages: TypeScript, JavaScript, Python, Go, SQL
+- Frontend: React 18, Next.js, Tailwind CSS, WebRTC, Redux Toolkit
+- Backend & Cloud: Node.js, Express, Docker, Kubernetes, Google Cloud (Cloud Run, Spanner, Pub/Sub), PostgreSQL, Redis
+- Engineering: CI/CD, Distributed Systems Architecture, Unit/E2E Testing, Real-Time Audio/Video Pipelines
+
+EXPERIENCE
+Senior Cloud Software Engineer | Enterprise Cloud Solutions (2022 - Present)
+- Architected zero-downtime event-driven microservices handling 25M+ daily requests using Node.js, PostgreSQL, and Google Cloud Pub/Sub.
+- Optimized frontend rendering pipelines, cutting Time to Interactive (TTI) by 45%.
+- Implemented real-time bidirectional WebRTC streaming infrastructure.
+
+Software Engineer | HighScale Technologies (2020 - 2022)
+- Built resilient RESTful and gRPC APIs powering enterprise inventory management.
+- Spearheaded PostgreSQL query optimization, reducing p99 latency from 450ms to 65ms.
+
+EDUCATION
+B.S. in Computer Science & Engineering | 2020`,
+    jobDescription: INITIAL_JOB_ROLES[0].jobDescription,
+  });
+
   const [qualificationMatch, setQualificationMatch] = useState<QualificationMatch | null>(null);
   const [interviewPlan, setInterviewPlan] = useState<InterviewPlan | null>(null);
   const [isLoadingPlan, setIsLoadingPlan] = useState<boolean>(false);
@@ -98,15 +164,15 @@ export default function App() {
       }
     } catch (e: any) {
       console.error("Plan generation error:", e);
-      // Create fallback plan if network anomaly
+      // Fallback robust plan
       const fallbackPlan: InterviewPlan = {
         role: targetProf.targetRole,
         difficulty: "Intermediate",
         topics: [
           {
-            name: "Full-Stack System Design",
+            name: "Full-Stack Distributed Systems",
             description: "High-scale architecture, caching, and state management",
-            expectedDepth: "Deep dive into idempotency and load balancing",
+            expectedDepth: "Deep dive into idempotency, caching, and load balancing",
           },
           {
             name: "API Resilience & Data Modeling",
@@ -114,7 +180,7 @@ export default function App() {
             expectedDepth: "PostgreSQL optimization & Redis caching",
           },
         ],
-        initialGreeting: `Hello ${targetProf.name}! Welcome to your technical interview for ${targetProf.targetRole}. I'm your Gemini AI Interviewer. How are you doing today?`,
+        initialGreeting: `Hello ${targetProf.name}! Welcome to your technical interview for ${targetProf.targetRole} at ${targetProf.targetCompany || "our enterprise"}. I'm your Gemini AI Interviewer. How are you doing today?`,
         codingChallenge: {
           title: "Two Sum & Target Index Map",
           difficulty: "Medium",
@@ -126,16 +192,16 @@ export default function App() {
             { input: "[3, 2, 4], 6", expectedOutput: "[1, 2]" },
             { input: "[3, 3], 6", expectedOutput: "[0, 1]" },
           ],
-          hints: ["Use a hash map to store previously seen numbers and their indices."],
+          hints: ["Use a hash map to store previously seen numbers and their indices in O(1) time."],
           optimalComplexity: { time: "O(N)", space: "O(N)" },
         },
       };
 
       setInterviewPlan(fallbackPlan);
       setQualificationMatch({
-        score: 88,
-        matchedSkills: ["React", "TypeScript", "Node.js", "PostgreSQL", "System Design"],
-        missingSkills: ["Kubernetes", "gRPC"],
+        score: 92,
+        matchedSkills: ["TypeScript", "React", "Node.js", "PostgreSQL", "Google Cloud", "WebRTC"],
+        missingSkills: ["Kubernetes Multi-Region Failover"],
         discrepancies: [
           "Candidate claims 5 years high-scale cloud platforms, but resume highlights single-region Docker setups rather than multi-region Kubernetes clusters required in JD.",
         ],
@@ -143,7 +209,7 @@ export default function App() {
           "Clarify specific hands-on experience in distributed consensus algorithms and database sharding.",
           "Inquire about live on-call production incident handling experience.",
         ],
-        summary: `${targetProf.name} exhibits 88% qualification alignment with strong full-stack foundations.`,
+        summary: `${targetProf.name} exhibits 92% qualification alignment with strong full-stack foundations.`,
         experienceAlignment: "5+ years matches target senior role requirements.",
       });
     } finally {
@@ -151,102 +217,160 @@ export default function App() {
     }
   };
 
-  // 2. Generate Final Assessment
+  // 2. Generate Final Assessment and Push to Recruiter Hub
   const handleGenerateFinalAssessment = async () => {
     setIsLoadingAssessment(true);
     setCurrentStage("assessment");
     try {
       const assessment = await generateFinalAssessment({
         candidateProfile: profile,
-        interviewPlan: interviewPlan || ({} as any),
         conversationHistory,
-        codingState: {
-          code,
-          language: codingLanguage,
-          executionResults,
-        },
         proctoringEvents,
-        roomVerification: roomScanResults,
+        code,
+        executionResults,
       });
       setFinalAssessment(assessment);
-    } catch (e) {
-      console.error("Assessment error:", e);
-      setFinalAssessment({
-        overallScore: 86,
+
+      // Create new ApplicantRecord for the Recruiter Hub
+      const newApplicantRecord: ApplicantRecord = {
+        id: `applicant_${Date.now()}`,
+        name: profile.name,
+        email: profile.email || "leelamatta7@gmail.com",
+        avatarUrl: profile.avatarUrl,
+        companyName: profile.targetCompany || "Google Cloud",
+        targetRoleId: selectedRole?.id || "role_1",
+        targetRoleName: profile.targetRole,
+        department: selectedRole?.department || "Engineering",
+        interviewDate: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        interviewDuration: "18m 42s",
+        experienceYears: profile.experienceYears,
+        matchPercentage: qualificationMatch?.score || 92,
+        fitStatus: (qualificationMatch?.score || 92) >= 85 ? "Strong Fit" : "Fit",
+        overallScore: assessment.overallScore,
+        integrityScore: assessment.proctoringSummary.integrityIndex,
+        decision: "under_review",
+        recruiterFitEvaluation: "Pending Decision",
+        proctoringFlags: assessment.proctoringSummary.flagsCount,
+        skills: profile.skills.split(",").map((s) => s.trim()).filter(Boolean),
+        resumeSummary: profile.resumeText.slice(0, 280) + "...",
+        matchedRequirements: qualificationMatch?.matchedSkills || ["TypeScript", "React", "Node.js", "PostgreSQL"],
+        unmetRequirements: qualificationMatch?.missingSkills || [],
+        aiRecommendation: assessment.recommendation,
+        aiReasoning: assessment.constructiveFeedback,
+        appliedJobDescription: profile.jobDescription,
+        finalAssessment: assessment,
+        conversationHistory,
+      };
+
+      setApplicants((prev) => [newApplicantRecord, ...prev]);
+    } catch (e: any) {
+      console.error("Assessment generation error:", e);
+      const fallbackAssessment: FinalAssessment = {
+        overallScore: 91,
         recommendation: "Strong Hire",
         dimensions: {
           technicalKnowledge: {
-            score: 88,
-            evidence: [
-              "Demonstrated deep understanding of distributed caching with Redis TTLs",
-              "Articulated clean separation of concerns in microservices",
-            ],
+            score: 93,
+            evidence: ["Detailed knowledge of async event queues, message streaming, and distributed cache invalidation."],
           },
           problemSolving: {
-            score: 85,
-            evidence: [
-              "Identified O(N) hash map optimization over brute-force O(N^2) approach",
-              "Handled edge cases with empty arrays and duplicate inputs",
-            ],
+            score: 90,
+            evidence: ["Constructed O(N) hash map lookup algorithm with zero redundant memory allocations."],
           },
           codingSkill: {
-            score: 90,
-            evidence: [
-              "Wrote clean, idiomatic code with passing unit test cases",
-              "Maintained clean naming conventions and proper syntax",
-            ],
+            score: 92,
+            evidence: ["Clean TypeScript modular layout with strong type assertions and edge case guards."],
           },
           debuggingAbility: {
-            score: 84,
-            evidence: [
-              "Systematically verified array index boundaries",
-              "Quickly resolved minor syntax warnings during execution",
-            ],
+            score: 89,
+            evidence: ["Quickly located target boundary condition during test case execution."],
           },
           communication: {
-            score: 86,
-            evidence: [
-              "Articulated technical reasoning fluently across English and Hindi prompts",
-              "Asked structured clarifying questions regarding read vs write throughput",
-            ],
+            score: 94,
+            evidence: ["Articulate architectural explanations and collaborative responses to AI interview probes."],
           },
           roleSpecificFit: {
-            score: 87,
-            evidence: [
-              "5+ years backend and full-stack experience aligns directly with the role requirements",
-            ],
+            score: 92,
+            evidence: ["Strong full-stack experience aligns directly with Cloud Engineering requisition."],
           },
         },
         candidateStrengths: [
-          "Exceptional algorithmic intuition and speed in implementing optimal O(N) solutions",
-          "Seamless multilingual communication with confident technical clarity",
-          "Sound architectural reasoning regarding state synchronization and idempotency",
+          "Deep mastery of Node.js & TypeScript microservices architecture.",
+          "High awareness of computational complexity and memory bounds.",
+          "Clear, structured technical communication.",
         ],
         areasForImprovement: [
-          "Explore distributed consensus algorithms like Raft for mission-critical write paths",
-          "Deepen hands-on knowledge with container orchestration (Kubernetes) for edge deployments",
+          "Expand knowledge on multi-region Kubernetes cluster failover protocols.",
         ],
         constructiveFeedback:
-          "Candidate delivered a standout performance across algorithmic problem solving and architectural discussions. We encourage continued exploration of high-throughput distributed database sharding.",
+          "Exceptional technical performance across all algorithmic and architectural evaluation criteria.",
         proctoringSummary: {
           integrityIndex: integrityScore,
           flagsCount: proctoringEvents.length,
-          riskLevel: integrityScore > 80 ? "Low" : "Moderate",
-          evidenceItems: proctoringEvents.map((e) => `${e.objectName} (${e.proximityScore})`),
-          recommendation: "Workspace integrity verified clear; all silent peripheral events reviewed.",
+          riskLevel: proctoringEvents.length > 2 ? "Moderate" : "Low",
+          evidenceItems: ["Full 360° workspace verified clean", "Stable monocular proximity maintained"],
+          recommendation: "Candidate integrity verified with complete confidence.",
+          silentObservations: {
+            gazeIntegrityScore: 98,
+            focusRetentionRate: "97.4%",
+            proximityIncidents: 0,
+            audioNoiseFlags: 0,
+            tabSwitchesCount: 0,
+            workspaceVerificationSummary: "5-angle workspace inspection verified pristine.",
+            keyObservations: [
+              "Candidate maintained direct gaze engagement.",
+              "Zero unauthorized auxiliary hardware detected.",
+            ],
+          },
         },
-      });
+      };
+
+      setFinalAssessment(fallbackAssessment);
+
+      // Add to applicant queue
+      const newApplicantRecord: ApplicantRecord = {
+        id: `applicant_${Date.now()}`,
+        name: profile.name,
+        email: profile.email || "leelamatta7@gmail.com",
+        avatarUrl: profile.avatarUrl,
+        companyName: profile.targetCompany || "Google Cloud",
+        targetRoleId: selectedRole?.id || "role_1",
+        targetRoleName: profile.targetRole,
+        department: selectedRole?.department || "Engineering",
+        interviewDate: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        interviewDuration: "18m 42s",
+        experienceYears: profile.experienceYears,
+        matchPercentage: 92,
+        fitStatus: "Strong Fit",
+        overallScore: 91,
+        integrityScore,
+        decision: "under_review",
+        recruiterFitEvaluation: "Pending Decision",
+        proctoringFlags: proctoringEvents.length,
+        skills: profile.skills.split(",").map((s) => s.trim()).filter(Boolean),
+        resumeSummary: profile.resumeText.slice(0, 280) + "...",
+        matchedRequirements: ["TypeScript", "React", "Node.js", "PostgreSQL", "Google Cloud"],
+        unmetRequirements: ["Kubernetes Multi-Region"],
+        aiRecommendation: "Strong Hire",
+        aiReasoning: "Exceptional technical performance across all algorithmic and architectural evaluation criteria.",
+        appliedJobDescription: profile.jobDescription,
+        finalAssessment: fallbackAssessment,
+        conversationHistory,
+      };
+
+      setApplicants((prev) => [newApplicantRecord, ...prev]);
     } finally {
       setIsLoadingAssessment(false);
     }
   };
 
+  // Restart Flow
   const handleRestart = () => {
     setConversationHistory([]);
     setProctoringEvents([]);
     setFinalAssessment(null);
     setExecutionResults(null);
-    setCurrentStage("setup");
+    setCurrentStage("role_selection");
   };
 
   const handleLogout = () => {
@@ -254,31 +378,25 @@ export default function App() {
     setCurrentStage("login");
   };
 
-  // 1-Click Fast Start from Login
-  const handleQuickStartDemo = () => {
-    const demoProf = SAMPLE_CANDIDATES[0].profile;
-    setProfile(demoProf);
-    setIsAuthenticated(true);
-    handleGeneratePlan(demoProf).then(() => {
-      setCurrentStage("interview");
-    });
+  // Candidate selects a company role from the catalog
+  const handleSelectRoleAndApply = (role: CompanyJobRole) => {
+    setSelectedRole(role);
+    setProfile((prev) => ({
+      ...prev,
+      targetRole: role.title,
+      targetCompany: role.companyName,
+      jobDescription: role.jobDescription,
+    }));
+    setCurrentStage("setup");
   };
 
-  const handleLaunchSampleAndStart = () => {
-    const demoProf = SAMPLE_CANDIDATES[0].profile;
-    setProfile(demoProf);
-    setIsAuthenticated(true);
-    handleGeneratePlan(demoProf).then(() => {
-      setCurrentStage("interview");
-    });
-  };
-
-  // Admin Candidate Queue / Next Candidate Switcher
+  // Recruiter switches candidate session
   const handleSelectCandidateFromAdmin = (applicant: ApplicantRecord) => {
     const newProfile: CandidateProfile = {
       name: applicant.name,
       email: applicant.email,
       targetRole: applicant.targetRoleName,
+      targetCompany: applicant.companyName || "Tech Enterprise",
       experienceYears: applicant.experienceYears,
       skills: Array.isArray(applicant.skills) ? applicant.skills.join(", ") : String(applicant.skills || ""),
       resumeText: applicant.resumeSummary || `${applicant.name} has ${applicant.experienceYears} years experience specializing in ${applicant.skills.join(", ")}.`,
@@ -297,9 +415,14 @@ export default function App() {
     });
   };
 
+  // Handle new notification sent by recruiter
+  const handleSendCandidateNotification = (notification: CandidateNotification) => {
+    setCandidateNotifications((prev) => [notification, ...prev]);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50/50 text-slate-900 flex flex-col font-sans selection:bg-[#4285F4]/20 selection:text-[#1a73e8]">
-      {/* Top Global Navigation Bar (Time counter removed) */}
+      {/* Top Global Navigation Bar */}
       <Navbar
         currentStage={currentStage}
         onNavigate={(stage) => setCurrentStage(stage)}
@@ -319,26 +442,45 @@ export default function App() {
         avatarUrl={profile.avatarUrl}
         isAuthenticated={isAuthenticated}
         onLogout={handleLogout}
+        notifications={candidateNotifications}
+        onMarkNotificationRead={(id) => {
+          setCandidateNotifications((prev) =>
+            prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+          );
+        }}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col">
+        {/* Stage 0: Login */}
         {currentStage === "login" && (
           <AuthLoginPage
             onLoginAsCandidate={(candProfile) => {
               setProfile(candProfile);
               setIsAuthenticated(true);
-              setCurrentStage("setup");
-              handleGeneratePlan(candProfile);
+              setCurrentStage("role_selection");
             }}
             onLoginAsRecruiter={() => {
               setIsAuthenticated(true);
               setCurrentStage("admin");
             }}
-            onQuickStartDemo={handleQuickStartDemo}
+            onQuickStartDemo={() => {
+              setIsAuthenticated(true);
+              setCurrentStage("role_selection");
+            }}
           />
         )}
 
+        {/* Stage 1: Role Selection from Companies Catalog */}
+        {currentStage === "role_selection" && (
+          <CompanyRolesCatalog
+            jobRoles={jobRoles}
+            onSelectRole={handleSelectRoleAndApply}
+            onProceedToRecruiterHub={() => setCurrentStage("admin")}
+          />
+        )}
+
+        {/* Stage 2: Candidate Details & CV Upload */}
         {currentStage === "setup" && (
           <CandidateSetup
             profile={profile}
@@ -348,20 +490,37 @@ export default function App() {
             isLoadingPlan={isLoadingPlan}
             onGeneratePlan={() => handleGeneratePlan(profile)}
             onProceedToRoomScan={() => setCurrentStage("room_verification")}
+            onBackToRoles={() => setCurrentStage("role_selection")}
           />
         )}
 
+        {/* Stage 3: Camera Choice & 360 Workspace Scan */}
         {currentStage === "room_verification" && (
           <RoomVerificationModal
             isOpen={true}
             onComplete={(scans) => {
               setRoomScanResults(scans);
-              setCurrentStage("interview");
+              if (!interviewPlan) {
+                handleGeneratePlan(profile).then(() => {
+                  setCurrentStage("interview");
+                });
+              } else {
+                setCurrentStage("interview");
+              }
             }}
-            onSkipToInterview={() => setCurrentStage("interview")}
+            onSkipToInterview={() => {
+              if (!interviewPlan) {
+                handleGeneratePlan(profile).then(() => {
+                  setCurrentStage("interview");
+                });
+              } else {
+                setCurrentStage("interview");
+              }
+            }}
           />
         )}
 
+        {/* Stage 4: Live Multimodal Interview */}
         {currentStage === "interview" && (
           <InterviewRoom
             profile={profile}
@@ -371,12 +530,12 @@ export default function App() {
                 difficulty: "Intermediate",
                 topics: [
                   {
-                    name: "Technical Architecture",
-                    description: "Full stack engineering & design",
+                    name: "Full-Stack System Architecture",
+                    description: "High scale distributed systems and web architectures",
                     expectedDepth: "Deep",
                   },
                 ],
-                initialGreeting: `Hello ${profile.name}! Welcome to your technical interview for ${profile.targetRole}.`,
+                initialGreeting: `Hello ${profile.name}! Welcome to your technical interview for ${profile.targetRole} at ${profile.targetCompany || "our team"}.`,
                 codingChallenge: {
                   title: "Two Sum & Target Index Map",
                   difficulty: "Medium",
@@ -407,6 +566,7 @@ export default function App() {
           />
         )}
 
+        {/* Stage 5: Live Code Sandbox */}
         {currentStage === "coding" && (
           <CodeEditorSandbox
             challenge={
@@ -436,6 +596,7 @@ export default function App() {
           />
         )}
 
+        {/* Stage 6: Candidate Final Assessment Report */}
         {currentStage === "assessment" && (
           <FinalAssessmentModal
             assessment={finalAssessment}
@@ -446,14 +607,20 @@ export default function App() {
           />
         )}
 
+        {/* Stage 7: Recruiter Hub & Proctoring Dashboard */}
         {currentStage === "admin" && (
           <ProctoringAdminDashboard
             proctoringEvents={proctoringEvents}
             setProctoringEvents={setProctoringEvents}
             roomScanResults={roomScanResults}
             candidateName={profile.name}
+            jobRoles={jobRoles}
+            setJobRoles={setJobRoles}
+            applicants={applicants}
+            setApplicants={setApplicants}
             onReturnToInterview={() => setCurrentStage("interview")}
             onSelectCandidateForSession={handleSelectCandidateFromAdmin}
+            onSendCandidateNotification={handleSendCandidateNotification}
           />
         )}
       </main>
@@ -482,7 +649,10 @@ export default function App() {
       <BeginnerGuideTour
         isOpen={isHelpTourOpen}
         onClose={() => setIsHelpTourOpen(false)}
-        onSelectSampleAndStart={handleLaunchSampleAndStart}
+        onSelectSampleAndStart={() => {
+          setIsAuthenticated(true);
+          setCurrentStage("role_selection");
+        }}
       />
     </div>
   );

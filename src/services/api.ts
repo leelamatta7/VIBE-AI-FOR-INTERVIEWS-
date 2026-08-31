@@ -7,7 +7,31 @@ import {
   FinalAssessment,
   ProctoringEvent,
   RoomScanStep,
+  CameraFrameAnalysisResponse,
+  MultimodalInterviewStepResponse,
 } from "../types";
+
+export async function sendMultimodalInterviewStep(payload: {
+  base64Frame?: string;
+  candidateInput?: string;
+  candidateName?: string;
+  role?: string;
+  conversationHistory?: any[];
+  contents?: any[];
+}): Promise<MultimodalInterviewStepResponse> {
+  const res = await fetch("/api/interview-step", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Failed to process multimodal interview step");
+  }
+
+  return res.json();
+}
 
 export async function parseResumeAndPlanInterview(profile: CandidateProfile): Promise<{
   qualificationMatch: QualificationMatch;
@@ -71,24 +95,7 @@ export async function sendInterviewTurn(payload: {
   return res.json();
 }
 
-export async function analyzeCameraFrame(imageBase64: string): Promise<{
-  personDetected: boolean;
-  multiplePeopleDetected: boolean;
-  detectedObjects: {
-    label: string;
-    confidence: number;
-    boundingBox?: { ymin: number; xmin: number; ymax: number; xmax: number };
-    estimatedDistance?: string;
-    proximityWarning?: boolean;
-  }[];
-  monocularDepthEstimate: {
-    closestSuspiciousObject: string | null;
-    estimatedDistanceFeet: number;
-    within3FeetZone: boolean;
-  };
-  overallRiskLevel: "safe" | "low" | "medium" | "high";
-  summaryNotes: string;
-}> {
+export async function analyzeCameraFrame(imageBase64: string): Promise<CameraFrameAnalysisResponse> {
   const res = await fetch("/api/vision/analyze-frame", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -173,11 +180,13 @@ export async function evaluateCandidateCode(payload: {
 
 export async function generateFinalAssessment(payload: {
   candidateProfile: CandidateProfile;
-  interviewPlan: InterviewPlan;
+  interviewPlan?: InterviewPlan | null;
   conversationHistory: ConversationTurn[];
-  codingState: any;
+  codingState?: any;
+  code?: string;
+  executionResults?: CodeExecutionResponse | null;
   proctoringEvents: ProctoringEvent[];
-  roomVerification: any;
+  roomVerification?: any;
 }): Promise<FinalAssessment> {
   const res = await fetch("/api/assessment/generate", {
     method: "POST",

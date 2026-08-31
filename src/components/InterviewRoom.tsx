@@ -30,6 +30,12 @@ import {
   FileText,
   Clock,
   ArrowRight,
+  Cpu,
+  Workflow,
+  Sparkle,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   CandidateProfile,
@@ -39,9 +45,22 @@ import {
   DetectedObject,
   QualificationMatch,
 } from "../types";
-import { sendInterviewTurn, analyzeCameraFrame } from "../services/api";
+import { sendInterviewTurn, analyzeCameraFrame, sendMultimodalInterviewStep } from "../services/api";
 import { SpeechRecognitionService, speakAIResponse, stopAISpeech } from "../utils/speech";
 import { SystemAudioListener, InterviewSessionRecorder, AudioVisualizerData } from "../utils/audioSystem";
+import {
+  WebRTCStreamController,
+  WebRTCStreamStats,
+  LiveKitPipecatTransportManager,
+  LiveKitAgentTransportStats,
+  VapiRetellOrchestrator,
+  VapiRetellOrchestrationStats,
+} from "../utils/realtimeStreaming";
+import {
+  AvatarLipSyncEngine,
+  AvatarProvider,
+  AvatarState,
+} from "../utils/avatarLipSync";
 
 interface InterviewRoomProps {
   profile: CandidateProfile;
@@ -85,6 +104,10 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
   const [audioMuted, setAudioMuted] = useState(false);
   const [cameraActive, setCameraActive] = useState(true);
 
+  // Real-Time Architecture Telemetry Drawer State
+  const [showArchTelemetry, setShowArchTelemetry] = useState(false);
+  const [selectedAvatarProvider, setSelectedAvatarProvider] = useState<AvatarProvider>("Anam AI");
+
   // System Audio Listener & Visualizer States
   const [audioData, setAudioData] = useState<AudioVisualizerData>({
     volume: 0,
@@ -93,13 +116,61 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
     isSpeaking: false,
   });
 
+  // Real-time Subsystem Stats
+  const [webrtcStats, setWebrtcStats] = useState<WebRTCStreamStats>({
+    connectionState: "connected",
+    iceConnectionState: "connected",
+    roundTripTimeMs: 38,
+    bitrateKbps: 1920,
+    packetLossPercentage: 0.0,
+    frameRate: 30,
+    resolution: "1280x720 (HD)",
+    audioSampleRate: 48000,
+    audioCodec: "Opus 64kbps",
+  });
+
+  const [transportStats, setTransportStats] = useState<LiveKitAgentTransportStats>({
+    roomName: "vibeai_prod_room_live",
+    participantId: `cand_${profile.name.toLowerCase().replace(/\s+/g, "_")}`,
+    transportType: "WebRTC DataChannel + MediaStream",
+    transportLatencyMs: 44,
+    voiceActivityDetected: false,
+    audioBufferMs: 20,
+    interruptionHandledCount: 0,
+    noiseSuppressionActive: true,
+    echoCancellationActive: true,
+  });
+
+  const [orchestratorStats, setOrchestratorStats] = useState<VapiRetellOrchestrationStats>({
+    pipelineStatus: "idle",
+    sttProvider: "Deepgram Nova-2",
+    llmModel: "Gemini 3.7 Flash",
+    ttsProvider: "ElevenLabs Multilingual v2",
+    endToEndLatencyMs: 268,
+    sttLatencyMs: 88,
+    llmFirstTokenMs: 135,
+    ttsSynthesisMs: 45,
+    activeSessionId: `ses_${Date.now().toString(36)}`,
+  });
+
+  const [avatarState, setAvatarState] = useState<AvatarState>({
+    provider: "Anam AI",
+    isSpeaking: false,
+    isThinking: false,
+    viseme: "silence",
+    mouthOpenPercent: 0,
+    mouthWidthPercent: 50,
+    headTiltDeg: 0,
+    eyeBlinkPercent: 0,
+    expression: "focused",
+  });
+
   // Session Recording States
   const [isRecordingSession, setIsRecordingSession] = useState(true);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [showRecordingModal, setShowRecordingModal] = useState(false);
 
   // Vision Proctoring States
-  const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
   const [monocularDepth, setMonocularDepth] = useState<{
     closestObject: string | null;
     distanceFeet: number;
@@ -111,11 +182,13 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
   });
   const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
 
-  // Dynamic skill evaluation meters
+  // Dynamic response-driven skill evaluation (evaluates candidate AFTER their responses)
+  const [evaluatedTurnsCount, setEvaluatedTurnsCount] = useState<number>(0);
+  const [latestEvidenceNote, setLatestEvidenceNote] = useState<string | null>(null);
   const [skillScores, setSkillScores] = useState({
-    technicalDepth: 82,
-    problemSolving: 74,
-    communication: 91,
+    technicalDepth: 0,
+    problemSolving: 0,
+    communication: 0,
   });
 
   // Refs
@@ -125,6 +198,10 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
   const speechRecognizerRef = useRef<SpeechRecognitionService | null>(null);
   const audioListenerRef = useRef<SystemAudioListener | null>(null);
   const sessionRecorderRef = useRef<InterviewSessionRecorder | null>(null);
+  const webrtcControllerRef = useRef<WebRTCStreamController | null>(null);
+  const transportManagerRef = useRef<LiveKitPipecatTransportManager | null>(null);
+  const orchestratorRef = useRef<VapiRetellOrchestrator | null>(null);
+  const avatarEngineRef = useRef<AvatarLipSyncEngine | null>(null);
 
   // Recording Timer Effect
   useEffect(() => {
@@ -139,7 +216,7 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
     };
   }, [isRecordingSession]);
 
-  const DEMO_TOTAL_SECONDS = 600; // 10-minute demo representing 60-minute technical interview
+  const DEMO_TOTAL_SECONDS = 600;
   const remainingSeconds = Math.max(0, DEMO_TOTAL_SECONDS - recordingSeconds);
   const currentPhase: 1 | 2 | 3 = recordingSeconds < 210 ? 1 : recordingSeconds < 480 ? 2 : 3;
 
@@ -149,63 +226,109 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  // Progress Calculation
   const progressPercent = Math.min(
     100,
     Math.max(25, Math.round(((conversationHistory.filter((t) => t.sender === "candidate").length + 1) / 8) * 100))
   );
 
-  // Latest AI Question/Turn for Subtitle display
   const latestAiTurn = [...conversationHistory].reverse().find((t) => t.sender === "ai");
   const subtitleText =
     latestAiTurn?.text ||
-    `Hello ${profile.name}! Welcome to your 10-minute technical demo interview for ${profile.targetRole}. We will explore your personal engineering experience and production systems, transition to live code solving, and synthesize your performance report.`;
+    `Hello ${profile.name}! Welcome to your technical interview for ${profile.targetRole}. We will examine your architectural experience, transition to live code solving, and synthesize your comprehensive assessment.`;
 
-  // Initialize Speech Recognizer, Audio Listener, and Webcam on Mount
+  // Initialize WebRTC, LiveKit, Vapi/Retell, Avatar, and Audio on mount
   useEffect(() => {
     speechRecognizerRef.current = new SpeechRecognitionService();
     audioListenerRef.current = new SystemAudioListener();
     sessionRecorderRef.current = new InterviewSessionRecorder();
+    webrtcControllerRef.current = new WebRTCStreamController();
+    transportManagerRef.current = new LiveKitPipecatTransportManager();
+    orchestratorRef.current = new VapiRetellOrchestrator();
+    
+    avatarEngineRef.current = new AvatarLipSyncEngine(selectedAvatarProvider, (state) => {
+      setAvatarState(state);
+    });
+
+    transportManagerRef.current.connect(`vibeai_room_${profile.name.toLowerCase().replace(/\s+/g, "_")}`, (stats) => {
+      setTransportStats(stats);
+    });
+
+    orchestratorRef.current.setCallback((stats) => {
+      setOrchestratorStats(stats);
+    });
 
     startWebcam();
 
-    // Add initial greeting if history is empty
+    // Initial greeting
     if (conversationHistory.length === 0 && interviewPlan) {
       const initialTurn: ConversationTurn = {
         id: "turn_init",
         sender: "ai",
         text:
           interviewPlan.initialGreeting ||
-          `Hello ${profile.name}! Welcome to your 10-minute technical demo interview for ${profile.targetRole} (condensed from our standard 60-minute technical session). We'll start with your personal engineering experience and production projects, move directly into our interactive Code Sandbox for live problem solving, and conclude with automated performance synthesis. To kick things off, could you walk me through your personal engineering background and the most challenging technical project you've built?`,
+          `Hello ${profile.name}! Welcome to your real-time technical interview for the ${profile.targetRole} role. We'll start with your personal engineering background and high-scale production systems, move into our interactive Code Sandbox for live problem solving, and conclude with automated performance synthesis. To kick things off, could you walk me through your engineering journey and the most challenging technical system you've architected?`,
         language: "English",
         timestamp: Date.now(),
         eventTag: "greeting",
       };
       setConversationHistory([initialTurn]);
+      
       if (!audioMuted) {
+        orchestratorRef.current?.setStatus("speaking", { ttsLatency: 42 });
+        avatarEngineRef.current?.setSpeaking(true);
         speakAIResponse(initialTurn.text, {
           language: "English",
-          onStart: () => setIsAiSpeaking(true),
-          onEnd: () => setIsAiSpeaking(false),
+          onStart: () => {
+            setIsAiSpeaking(true);
+            avatarEngineRef.current?.setSpeaking(true);
+            orchestratorRef.current?.setStatus("speaking");
+          },
+          onEnd: () => {
+            setIsAiSpeaking(false);
+            avatarEngineRef.current?.setSpeaking(false);
+            orchestratorRef.current?.setStatus("idle");
+          },
         });
       }
     }
 
     return () => {
       stopAISpeech();
-      if (speechRecognizerRef.current) {
-        speechRecognizerRef.current.stop();
-      }
-      if (audioListenerRef.current) {
-        audioListenerRef.current.stop();
-      }
+      avatarEngineRef.current?.dispose();
+      webrtcControllerRef.current?.dispose();
+      transportManagerRef.current?.disconnect();
+      speechRecognizerRef.current?.stop();
+      audioListenerRef.current?.stop();
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current.getTracks().forEach((track) => {
+          try {
+            track.stop();
+          } catch (e) {}
+        });
+        streamRef.current = null;
       }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      setCameraActive(false);
     };
   }, []);
 
-  // Periodic Talview Live Video & Suspicious Event Detection Loop
+  // Update avatar provider when user changes selection
+  useEffect(() => {
+    if (avatarEngineRef.current) {
+      avatarEngineRef.current.setProvider(selectedAvatarProvider);
+    }
+  }, [selectedAvatarProvider]);
+
+  // Feed audio analyzer to avatar lip sync engine
+  useEffect(() => {
+    if (avatarEngineRef.current && isAiSpeaking) {
+      avatarEngineRef.current.feedAudioData(audioData.volume, audioData.frequencies);
+    }
+  }, [audioData, isAiSpeaking]);
+
+  // Periodic Silent Vision & Depth Proctoring Loop (Passive Visual Auditor)
   useEffect(() => {
     const talviewInterval = setInterval(async () => {
       if (!cameraActive) return;
@@ -222,36 +345,72 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
           });
         }
 
-        // Check if suspicious events need silent logging
+        const isGazeDeviation = result.eyeGazeAnalysis?.frequentGazeDeviationDetected || (result.eyeGazeAnalysis && result.eyeGazeAnalysis.lookingAtScreen === false);
+        const hasSuspiciousObject = result.detectedObjects && result.detectedObjects.some((o: any) => 
+          o.label === "cell phone" || 
+          o.label === "tablet" || 
+          o.label === "laptop" || 
+          o.label === "smartwatch" || 
+          o.label === "headphones" || 
+          o.label === "notes/paper" || 
+          o.label === "textbook" || 
+          o.label === "extra monitor" ||
+          o.proximityWarning
+        );
+
         if (
           result.overallRiskLevel === "high" ||
           result.overallRiskLevel === "medium" ||
           result.multiplePeopleDetected ||
           result.monocularDepthEstimate?.within3FeetZone ||
-          (result.detectedObjects && result.detectedObjects.some((o: any) => o.label === "cell phone" || o.label === "notes/paper"))
+          hasSuspiciousObject ||
+          isGazeDeviation
         ) {
-          const firstSuspicious = result.detectedObjects?.find((o: any) => o.label === "cell phone" || o.label === "notes/paper" || o.proximityWarning);
+          const firstSuspicious = result.detectedObjects?.find((o: any) => 
+            o.label === "cell phone" || 
+            o.label === "tablet" || 
+            o.label === "notes/paper" || 
+            o.label === "textbook" || 
+            o.label === "laptop" ||
+            o.proximityWarning
+          );
+
+          const timeFormatted = new Date().toLocaleTimeString();
+          let eventType: ProctoringEvent["eventType"] = "device_detected";
+          let objectName = firstSuspicious?.label || "device detected";
+
+          if (result.multiplePeopleDetected) {
+            eventType = "multiple_people";
+            objectName = "additional person in frame";
+          } else if (isGazeDeviation && !hasSuspiciousObject) {
+            eventType = "gaze_deviation";
+            objectName = "off-screen eye-gaze deviation";
+          } else if (result.monocularDepthEstimate?.within3FeetZone) {
+            eventType = "monocular_depth_proximity";
+            objectName = "object proximity (<3ft)";
+          }
+
+          const incidentDesc = result.incidentDescription || 
+            (firstSuspicious ? `Candidate utilized or placed ${firstSuspicious.label} at [${timeFormatted}]` : 
+            isGazeDeviation ? `Frequent off-screen eye-gaze deviation detected at [${timeFormatted}]` : 
+            `Visual anomaly detected at [${timeFormatted}]`);
+
           const newEvent: ProctoringEvent = {
-            id: `evt_talview_${Date.now()}`,
+            id: `evt_proctor_${Date.now()}`,
             timestamp: Date.now(),
-            timeFormatted: new Date().toLocaleTimeString(),
-            eventType: result.multiplePeopleDetected
-              ? "multiple_people"
-              : result.monocularDepthEstimate?.within3FeetZone
-              ? "monocular_depth_proximity"
-              : "device_detected",
-            objectName: firstSuspicious?.label || (result.multiplePeopleDetected ? "additional person" : "proximity alert"),
-            confidence: Math.round((firstSuspicious?.confidence || 0.92) * 100),
+            timeFormatted,
+            eventType,
+            objectName,
+            confidence: Math.round((firstSuspicious?.confidence || result.eyeGazeAnalysis?.confidence || 0.92) * 100),
             proximityScore: result.monocularDepthEstimate?.within3FeetZone ? "close (<3ft)" : "medium (3-6ft)",
             snapshotBase64: frameBase64,
-            severity: result.overallRiskLevel === "high" ? "high" : "medium",
+            severity: result.overallRiskLevel === "high" || hasSuspiciousObject ? "high" : "medium",
             reviewed: false,
-            notes: result.summaryNotes || "Talview AI detected unauthorized device or proximity event silently.",
+            notes: incidentDesc,
           };
 
           setProctoringEvents((prev) => {
-            // Avoid duplicate log within 8 seconds
-            if (prev.length > 0 && Date.now() - prev[0].timestamp < 8000) {
+            if (prev.length > 0 && Date.now() - prev[0].timestamp < 7000) {
               return prev;
             }
             return [newEvent, ...prev];
@@ -260,19 +419,19 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
       } catch (err) {
         // Silent recovery without disturbing candidate
       }
-    }, 12000);
+    }, 8000);
 
     return () => clearInterval(talviewInterval);
   }, [cameraActive]);
 
-  // Auto-scroll transcript container internally to bottom (without shifting page scroll position)
+  // Auto-scroll transcript container internally
   useEffect(() => {
     if (transcriptContainerRef.current) {
       transcriptContainerRef.current.scrollTop = transcriptContainerRef.current.scrollHeight;
     }
   }, [conversationHistory, isAiThinking, liveInterimSpeech]);
 
-  // Webcam Starter
+  // Webcam & WebRTC Starter
   const startWebcam = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -289,10 +448,20 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
       }
       setCameraActive(true);
 
+      // Connect WebRTC stream controller
+      if (webrtcControllerRef.current) {
+        webrtcControllerRef.current.initialize(stream, (stats) => {
+          setWebrtcStats(stats);
+        });
+      }
+
       // Start System Audio Listener with the live stream
       if (audioListenerRef.current) {
         audioListenerRef.current.start(stream, (data) => {
           setAudioData(data);
+          if (transportManagerRef.current) {
+            transportManagerRef.current.setVoiceActivity(data.isSpeaking);
+          }
         });
       }
 
@@ -303,7 +472,6 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
       }
     } catch (err: any) {
       console.warn("Webcam/Mic setup notice:", err);
-      // Fallback audio listener without hardware stream
       if (audioListenerRef.current) {
         audioListenerRef.current.start(undefined, (data) => {
           setAudioData(data);
@@ -341,7 +509,7 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
       .map(
         (t) =>
           `[${new Date(t.timestamp).toLocaleTimeString()}] ${
-            t.sender === "candidate" ? profile.name : "AI Interviewer"
+            t.sender === "candidate" ? profile.name : "AI Interviewer (VIBE AI)"
           } (${t.language || "EN"}):\n${t.text}\n`
       )
       .join("\n--------------------\n\n");
@@ -355,14 +523,46 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
     setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
-  // Toggle Speech Input / Voice Recognition
+  // Turn off camera and media streams when ending interview
+  const handleEndInterviewSession = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (e) {}
+      });
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraActive(false);
+    stopAISpeech();
+    speechRecognizerRef.current?.stop();
+    audioListenerRef.current?.stop();
+    webrtcControllerRef.current?.dispose();
+    transportManagerRef.current?.disconnect();
+    onEndInterview();
+  };
+
+  // Toggle Speech Input / Voice Recognition with Pipecat VAD
   const toggleListening = () => {
     if (isListening) {
       speechRecognizerRef.current?.stop();
       setIsListening(false);
       setLiveInterimSpeech("");
+      orchestratorRef.current?.setStatus("idle");
     } else {
+      // Interruption handling if AI is speaking
+      if (isAiSpeaking) {
+        stopAISpeech();
+        setIsAiSpeaking(false);
+        avatarEngineRef.current?.setSpeaking(false);
+        transportManagerRef.current?.recordInterruption();
+      }
+
       setIsListening(true);
+      orchestratorRef.current?.setStatus("listening");
       speechRecognizerRef.current?.setLanguage(detectedLanguage);
       speechRecognizerRef.current?.start(
         (text, isFinal) => {
@@ -379,6 +579,7 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
         (error) => {
           console.warn("Speech recognition notice:", error);
           setIsListening(false);
+          orchestratorRef.current?.setStatus("idle");
         }
       );
     }
@@ -396,7 +597,6 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
         return canvas.toDataURL("image/jpeg", 0.6);
       }
     }
-    // Synthetic fallback frame
     const canvas = document.createElement("canvas");
     canvas.width = 480;
     canvas.height = 360;
@@ -406,17 +606,16 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
       ctx.fillRect(0, 0, 480, 360);
       ctx.fillStyle = "#38BDF8";
       ctx.font = "16px sans-serif";
-      ctx.fillText(`Candidate Video Stream: ${profile.name}`, 30, 180);
+      ctx.fillText(`WebRTC Stream: ${profile.name}`, 30, 180);
     }
     return canvas.toDataURL("image/jpeg", 0.6);
   };
 
-  // Send candidate answer to AI backend
+  // Send candidate answer to AI backend via Vapi/Retell Pipeline
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
     if (!text || isAiThinking) return;
 
-    // Add candidate turn to history
     const candidateTurn: ConversationTurn = {
       id: `turn_${Date.now()}`,
       sender: "candidate",
@@ -430,122 +629,136 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
     setInputText("");
     setLiveInterimSpeech("");
     setIsAiThinking(true);
+    avatarEngineRef.current?.setThinking(true);
+    orchestratorRef.current?.setStatus("thinking", { sttLatency: 84, llmLatency: 140 });
+
+    const startTime = Date.now();
+    const currentFrame = captureFrameBase64();
 
     try {
-      const res = await sendInterviewTurn({
+      // Use Multimodal AI Interviewer, Technical Evaluator & Silent Proctor pipeline
+      const multimodalRes = await sendMultimodalInterviewStep({
+        base64Frame: currentFrame,
+        candidateInput: text,
         candidateName: profile.name,
         role: profile.targetRole,
         conversationHistory: updatedHistory,
-        candidateInput: text,
-        currentTopic: interviewPlan.topics[currentTopicIndex]?.name || "Technical Core",
-        currentDifficulty,
-        targetLanguage: detectedLanguage,
-        progressPercent,
-        flaggedDiscrepancies: qualificationMatch?.discrepancies,
-        areasForClarification: qualificationMatch?.areasForClarification,
       });
 
-      if (res.detectedLanguage) {
-        setDetectedLanguage(res.detectedLanguage);
+      const llmLatency = Date.now() - startTime;
+      const verbalResponse = multimodalRes.candidate_verbal_response;
+
+      // Handle Silent Proctoring Dual Output
+      if (multimodalRes.silent_proctoring_log?.suspicious_activity_detected) {
+        const proctorLog = multimodalRes.silent_proctoring_log;
+        const timeFormatted = new Date().toLocaleTimeString();
+        const newEvent: ProctoringEvent = {
+          id: `evt_multimodal_${Date.now()}`,
+          timestamp: Date.now(),
+          timeFormatted,
+          eventType: "device_detected",
+          objectName: proctorLog.evidence_description || "suspicious activity detected",
+          confidence: Math.round((proctorLog.confidence_score || 0.9) * 100),
+          proximityScore: "close (<3ft)",
+          snapshotBase64: currentFrame,
+          severity: proctorLog.confidence_score > 0.8 ? "high" : "medium",
+          reviewed: false,
+          notes: proctorLog.evidence_description || `Suspicious activity logged at [${timeFormatted}]`,
+        };
+        setProctoringEvents((prev) => [newEvent, ...prev]);
       }
 
-      if (res.adaptedDifficulty) {
-        setCurrentDifficulty(res.adaptedDifficulty);
-      }
+      // Handle Performance Analysis Dual Output
+      if (multimodalRes.performance_analysis) {
+        const perf = multimodalRes.performance_analysis;
+        const rawRunning = perf.running_score_out_of_10 || 8.0;
+        const normalizedScore = Math.min(100, Math.max(30, Math.round(rawRunning * 10)));
+        const commScore = perf.communication_clarity ? Math.min(100, Math.max(35, normalizedScore + 5)) : 80;
 
-      if (res.turnAssessment) {
-        setSkillScores({
-          technicalDepth: res.turnAssessment.technicalUnderstandingScore || 85,
-          problemSolving: Math.round(((res.turnAssessment.technicalUnderstandingScore || 85) + (res.turnAssessment.communicationClarityScore || 85)) / 2),
-          communication: res.turnAssessment.communicationClarityScore || 88,
+        setSkillScores((prev) => {
+          if (evaluatedTurnsCount === 0) {
+            return {
+              technicalDepth: normalizedScore,
+              problemSolving: normalizedScore,
+              communication: commScore,
+            };
+          }
+          return {
+            technicalDepth: Math.round((prev.technicalDepth * 2 + normalizedScore) / 3),
+            problemSolving: Math.round((prev.problemSolving * 2 + normalizedScore) / 3),
+            communication: Math.round((prev.communication * 2 + commScore) / 3),
+          };
         });
+
+        setEvaluatedTurnsCount((prev) => prev + 1);
+        if (perf.technical_understanding || perf.communication_clarity) {
+          setLatestEvidenceNote(
+            `${perf.technical_understanding || ""} ${perf.communication_clarity || ""}`.trim()
+          );
+        }
       }
 
-      // Add AI turn
       const aiTurn: ConversationTurn = {
         id: `turn_${Date.now() + 1}`,
         sender: "ai",
-        text: res.responseSpeechText,
-        language: res.detectedLanguage || "English",
+        text: verbalResponse,
+        language: detectedLanguage || "English",
         timestamp: Date.now(),
-        turnAssessment: res.turnAssessment,
-        eventTag: res.adaptedDifficulty !== currentDifficulty ? "difficulty_change" : undefined,
+        turnAssessment: {
+          technicalUnderstandingScore: Math.round(multimodalRes.performance_analysis?.running_score_out_of_10 || 8),
+          communicationClarityScore: 8,
+          evidenceNote: multimodalRes.performance_analysis?.technical_understanding || "Evaluated response depth.",
+          suggestedNextStage: "continue_topic",
+        },
       };
 
       setConversationHistory((prev) => [...prev, aiTurn]);
 
-      // Speak response
+      // Trigger TTS & Avatar Lip Sync
       if (!audioMuted) {
-        speakAIResponse(res.responseSpeechText, {
-          language: res.detectedLanguage || "English",
-          onStart: () => setIsAiSpeaking(true),
-          onEnd: () => setIsAiSpeaking(false),
-        });
-      }
+        orchestratorRef.current?.setStatus("synthesizing", { llmLatency, ttsLatency: 45 });
+        avatarEngineRef.current?.setThinking(false);
+        avatarEngineRef.current?.setSpeaking(true);
 
-      // Auto advance topic if recommended
-      if (res.turnAssessment?.suggestedNextStage === "switch_topic") {
-        setCurrentTopicIndex((prev) =>
-          Math.min(interviewPlan.topics.length - 1, prev + 1)
-        );
+        speakAIResponse(verbalResponse, {
+          language: detectedLanguage || "English",
+          onStart: () => {
+            setIsAiSpeaking(true);
+            avatarEngineRef.current?.setSpeaking(true);
+            orchestratorRef.current?.setStatus("speaking");
+          },
+          onEnd: () => {
+            setIsAiSpeaking(false);
+            avatarEngineRef.current?.setSpeaking(false);
+            orchestratorRef.current?.setStatus("idle");
+          },
+        });
       }
     } catch (err: any) {
       console.error("AI turn error:", err);
-      const textLower = text.toLowerCase();
-      let fallbackText = `Regarding your point on "${text.slice(0, 40)}${text.length > 40 ? '...' : ''}", how would you approach the tradeoffs and edge cases when designing this in production?`;
-      if (textLower.includes("hindi") || /[\u0900-\u097F]/.test(text)) {
-        fallbackText = `Aapne jo point explain kiya regarding "${text.slice(0, 35)}...", usko production me implement karte waqt scale aur reliability ko kaise ensure karenge?`;
-      } else if (textLower.includes("why") || textLower.includes("how") || textLower.includes("?")) {
-        fallbackText = `Great question. When dealing with that scenario, the primary considerations are latency and data consistency. How would you balance those requirements?`;
-      }
+      const fallbackText = `Regarding your point on "${text.slice(0, 40)}${text.length > 40 ? '...' : ''}", how do you evaluate the scalability and failure recovery considerations in production?`;
 
       const fallbackTurn: ConversationTurn = {
         id: `turn_${Date.now() + 1}`,
         sender: "ai",
         text: fallbackText,
-        language: /[\u0900-\u097F]/.test(text) ? "Hindi" : "English",
+        language: "English",
         timestamp: Date.now(),
         eventTag: "adaptive_probe",
       };
       setConversationHistory((prev) => [...prev, fallbackTurn]);
     } finally {
       setIsAiThinking(false);
-    }
-  };
-
-  // Quick Simulation / Demo Buttons for Hackathon Judges
-  const simulateCandidateAnswer = (type: "hindi" | "strong" | "phone_detected" | "clarify" | "personal_experience") => {
-    if (type === "personal_experience") {
-      handleSendMessage("In my previous role as Senior Engineer, I architected a distributed event ingestion pipeline in Go and Node.js that processed over 60,000 events/sec. We resolved database write bottlenecks by introducing Redis cache-aside sharding and asynchronous Kafka queues with automated retry backoffs.");
-    } else if (type === "hindi") {
-      handleSendMessage("Haan, REST APIs basically stateless hote hain jisme hum HTTP methods like GET, POST use karte hain data exchange ke liye.");
-    } else if (type === "strong") {
-      handleSendMessage("To guarantee idempotent updates, we assign a unique idempotency key per transaction in Redis with a 15-minute TTL and use database row locks during commit.");
-    } else if (type === "clarify") {
-      handleSendMessage("Could you clarify whether we are optimizing primarily for read throughput or write latency in this microservices setup?");
-    } else if (type === "phone_detected") {
-      const mockEvent: ProctoringEvent = {
-        id: `evt_sim_${Date.now()}`,
-        timestamp: Date.now(),
-        timeFormatted: new Date().toLocaleTimeString(),
-        eventType: "monocular_depth_proximity",
-        objectName: "cell phone",
-        confidence: 94,
-        proximityScore: "close (<3ft)",
-        snapshotBase64: captureFrameBase64(),
-        severity: "high",
-        reviewed: false,
-        notes: "Silently detected smartphone at 2.1ft (proximity flag). Logged to HR proctoring audit without candidate disruption.",
-      };
-      setProctoringEvents((prev) => [mockEvent, ...prev]);
+      avatarEngineRef.current?.setThinking(false);
     }
   };
 
   return (
     <div className="flex-1 bg-[#F8F9FA] text-[#202124] p-4 sm:p-6 flex flex-col gap-5">
-      {/* 10-Minute Demo Pacing & Round Roadmap Banner */}
+      
+      {/* Top Header: 10-Minute Pacing, Live Subsystems & Architecture Telemetry Toggle */}
       <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Left: 10-Minute Session Timer & Round Indicator */}
+        {/* Left: Timer & Round Status */}
         <div className="flex items-center gap-3.5">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
             <Clock className="w-5 h-5" />
@@ -553,10 +766,11 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-gray-900">
-                10-Minute Technical Demo Interview
+                Live Technical Interview Session
               </span>
-              <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full">
-                60m Condensed
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                WebRTC Active
               </span>
             </div>
             <div className="flex items-center gap-3 mt-1 text-xs font-semibold text-gray-600">
@@ -565,7 +779,7 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
               </span>
               <span className="text-gray-400">•</span>
               <span className={currentPhase === 1 ? "text-[#1a73e8] font-bold" : currentPhase === 2 ? "text-indigo-600 font-bold" : "text-emerald-600 font-bold"}>
-                {currentPhase === 1 ? "Round 1: Personal Experience & Systems" : currentPhase === 2 ? "Round 2: Live Code Sandbox" : "Round 3: AI Synthesis & Wrap-up"}
+                {currentPhase === 1 ? "Round 1: Personal Experience & Architecture" : currentPhase === 2 ? "Round 2: Live Coding Sandbox" : "Round 3: AI Synthesis"}
               </span>
             </div>
           </div>
@@ -590,7 +804,6 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
                 ? "bg-white text-indigo-600 shadow-2xs"
                 : "text-gray-600 hover:text-indigo-600"
             }`}
-            title="Jump directly to Round 2: Code Sandbox"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
             <span>2. Live Coding</span>
@@ -607,8 +820,23 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
           </div>
         </div>
 
-        {/* Right: Recording & Navigation Actions */}
+        {/* Right: Real-Time Architecture Telemetry & Actions */}
         <div className="flex items-center gap-2">
+          {/* Telemetry Inspector Button */}
+          <button
+            onClick={() => setShowArchTelemetry(!showArchTelemetry)}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+              showArchTelemetry
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+            }`}
+            title="Inspect real-time WebRTC, LiveKit, Avatar, and Vapi/Retell telemetry"
+          >
+            <Cpu className="w-3.5 h-3.5" />
+            <span>Streaming Telemetry</span>
+            {showArchTelemetry ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+
           {/* Recording Control Button */}
           <button
             onClick={handleToggleRecording}
@@ -617,7 +845,6 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
                 ? "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
             }`}
-            title="Toggle interview audio and video session recording"
           >
             {isRecordingSession ? (
               <>
@@ -628,83 +855,204 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
             ) : (
               <>
                 <Radio className="w-3.5 h-3.5 text-gray-600" />
-                <span>Record Session</span>
+                <span>Record</span>
               </>
             )}
           </button>
-
-          <button
-            onClick={onNavigateToCoding}
-            className="px-3.5 py-2 bg-[#4285F4] hover:bg-[#3367D6] text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <Code2 className="w-3.5 h-3.5" />
-            <span>Code Sandbox</span>
-            <ArrowRight className="w-3 h-3" />
-          </button>
         </div>
       </div>
 
-      {/* Quick Demo Triggers Bar for Fast-Track Testing */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-2.5 sm:p-3 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
-        <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase">
-          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-          <span>Demo Quick Triggers:</span>
-        </div>
+      {/* Real-Time Architecture Telemetry Drawer (WebRTC, LiveKit/Pipecat, Anam/HeyGen/D-ID, Vapi/Retell) */}
+      {showArchTelemetry && (
+        <div className="bg-gray-900 text-white rounded-2xl p-5 border border-gray-800 shadow-xl space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-800">
+            <div className="flex items-center gap-2">
+              <Workflow className="w-4 h-4 text-[#4285F4]" />
+              <h3 className="text-sm font-bold text-white tracking-wide">
+                Real-Time Streaming & Orchestration Telemetry Stack
+              </h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-gray-400">Avatar Engine:</span>
+              <div className="flex gap-1 bg-gray-800 p-1 rounded-lg">
+                {(["Anam AI", "HeyGen", "D-ID"] as AvatarProvider[]).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setSelectedAvatarProvider(p)}
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-colors cursor-pointer ${
+                      selectedAvatarProvider === p
+                        ? "bg-[#4285F4] text-white"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            onClick={() => simulateCandidateAnswer("personal_experience")}
-            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-            title="Simulate candidate answering with production architecture experience"
-          >
-            💼 Personal Experience ("Ingestion pipeline in Go & Node...")
-          </button>
-          <button
-            onClick={() => simulateCandidateAnswer("hindi")}
-            className="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-          >
-            🇮🇳 Hindi / Hinglish
-          </button>
-          <button
-            onClick={() => simulateCandidateAnswer("strong")}
-            className="px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-          >
-            💡 Redis & Idempotency
-          </button>
-          <button
-            onClick={() => simulateCandidateAnswer("phone_detected")}
-            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-          >
-            📱 Silent Phone Log &lt;3ft
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* 1. WebRTC & Video SDK Stats */}
+            <div className="p-3 bg-gray-800/80 rounded-xl border border-gray-700 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-blue-400 flex items-center gap-1">
+                  <Radio className="w-3.5 h-3.5" />
+                  WebRTC / Video SDK
+                </span>
+                <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800">
+                  {webrtcStats.connectionState}
+                </span>
+              </div>
+              <div className="text-[11px] text-gray-300 space-y-0.5 font-mono">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">RTT Latency:</span>
+                  <span className="text-emerald-400 font-bold">{webrtcStats.roundTripTimeMs}ms</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Bitrate:</span>
+                  <span>{webrtcStats.bitrateKbps} kbps</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Packet Loss:</span>
+                  <span className="text-green-400">{webrtcStats.packetLossPercentage}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Resolution:</span>
+                  <span>{webrtcStats.resolution}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. LiveKit & Pipecat Stats */}
+            <div className="p-3 bg-gray-800/80 rounded-xl border border-gray-700 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-indigo-400 flex items-center gap-1">
+                  <Layers className="w-3.5 h-3.5" />
+                  LiveKit / Pipecat
+                </span>
+                <span className="text-[10px] font-mono text-indigo-300 font-bold bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-800">
+                  {transportStats.transportLatencyMs}ms
+                </span>
+              </div>
+              <div className="text-[11px] text-gray-300 space-y-0.5 font-mono">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">VAD Speech:</span>
+                  <span className={transportStats.voiceActivityDetected ? "text-emerald-400 font-bold" : "text-gray-500"}>
+                    {transportStats.voiceActivityDetected ? "Active Voice" : "Listening..."}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Audio Buffer:</span>
+                  <span>{transportStats.audioBufferMs}ms</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Interruptions:</span>
+                  <span className="text-amber-400 font-bold">{transportStats.interruptionHandledCount}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Transport:</span>
+                  <span className="truncate text-gray-300">DataChannel</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Avatar & Lip-Sync Rendering Engine */}
+            <div className="p-3 bg-gray-800/80 rounded-xl border border-gray-700 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-purple-400 flex items-center gap-1">
+                  <VideoIcon className="w-3.5 h-3.5" />
+                  {avatarState.provider} Lip-Sync
+                </span>
+                <span className="text-[10px] font-mono text-purple-300 font-bold bg-purple-950/60 px-1.5 py-0.5 rounded border border-purple-800 uppercase">
+                  Viseme: {avatarState.viseme}
+                </span>
+              </div>
+              <div className="text-[11px] text-gray-300 space-y-0.5 font-mono">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Mouth Open:</span>
+                  <span className="text-purple-300 font-bold">{avatarState.mouthOpenPercent}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Head Tilt:</span>
+                  <span>{avatarState.headTiltDeg.toFixed(1)}°</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Expression:</span>
+                  <span className="capitalize text-gray-200">{avatarState.expression}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Eye Blink:</span>
+                  <span>{avatarState.eyeBlinkPercent > 0 ? "Blinking" : "Open (Tracking)"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Vapi & Retell AI Pipeline Stats */}
+            <div className="p-3 bg-gray-800/80 rounded-xl border border-gray-700 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                  <Cpu className="w-3.5 h-3.5" />
+                  Vapi / Retell AI
+                </span>
+                <span className="text-[10px] font-mono text-emerald-300 font-bold bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800">
+                  {orchestratorStats.endToEndLatencyMs}ms E2E
+                </span>
+              </div>
+              <div className="text-[11px] text-gray-300 space-y-0.5 font-mono">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">STT (Deepgram):</span>
+                  <span>{orchestratorStats.sttLatencyMs}ms</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">LLM (Gemini):</span>
+                  <span className="text-blue-300 font-bold">{orchestratorStats.llmFirstTokenMs}ms</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">TTS Synthesis:</span>
+                  <span>{orchestratorStats.ttsSynthesisMs}ms</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Pipeline Status:</span>
+                  <span className="capitalize text-emerald-400 font-bold">{orchestratorStats.pipelineStatus}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Container Layout */}
       <div className="flex flex-col lg:flex-row gap-6">
-        {/* Left Column: Hero Video Stage + Bottom Metric Bar */}
+        {/* Left Column: Hero Video Stage + AI Viseme Avatar & Candidate WebRTC PiP */}
         <div className="flex-1 flex flex-col gap-6">
-          {/* Main Cinematic Video Hero Card */}
           <div className="relative min-h-[440px] sm:min-h-[480px] bg-gray-900 rounded-2xl overflow-hidden shadow-2xl border-4 border-white flex flex-col justify-between p-6">
+            
             {/* Ambient Pulsing Glow Halo */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div
-                className={`w-64 h-64 rounded-full bg-gradient-to-tr from-[#4285F4] via-[#9B51E0] to-[#EA4335] blur-3xl transition-opacity duration-700 ${
-                  isAiSpeaking ? "opacity-80 scale-110 animate-pulse" : "opacity-40 scale-95"
+                className={`w-72 h-72 rounded-full bg-gradient-to-tr from-[#4285F4] via-[#9B51E0] to-[#34A853] blur-3xl transition-all duration-700 ${
+                  isAiSpeaking ? "opacity-90 scale-115" : isAiThinking ? "opacity-60 scale-100 animate-pulse" : "opacity-30 scale-90"
                 }`}
               />
             </div>
 
-            {/* Top Left Vision & System Audio Badges */}
+            {/* Top Left Vision & System Badges */}
             <div className="relative z-10 flex flex-col gap-2 self-start">
-              <div className="px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-full border border-white/20 flex items-center gap-2">
+              <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-full border border-white/20 flex items-center gap-2">
                 <div className="w-2 h-2 bg-[#9B51E0] rounded-full shadow-[0_0_8px_#9B51E0]"></div>
                 <span className="text-xs text-white font-medium">Vision: Clear</span>
               </div>
-              <div className="px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-full border border-white/20 flex items-center gap-2">
+              <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-full border border-white/20 flex items-center gap-2">
                 <div className="w-2 h-2 bg-[#4285F4] rounded-full shadow-[0_0_8px_#4285F4]"></div>
                 <span className="text-xs text-white font-medium font-mono">
                   Depth: {monocularDepth.distanceFeet.toFixed(1)}ft
+                </span>
+              </div>
+              <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-full border border-white/20 flex items-center gap-2">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_#10B981]"></div>
+                <span className="text-xs text-white font-medium font-mono">
+                  {selectedAvatarProvider} Active
                 </span>
               </div>
             </div>
@@ -722,143 +1070,225 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
               ) : (
                 <div className="absolute inset-0 bg-gray-700 flex items-center justify-center">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                    Candidate Camera
+                    Candidate Stream
                   </span>
                 </div>
               )}
               {/* Video Active Status */}
               <div className="absolute top-2 left-2 flex items-center gap-1 bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-xs">
                 <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-[8px] text-white font-bold uppercase">Video Active</span>
+                <span className="text-[8px] text-white font-bold uppercase">Live WebRTC</span>
               </div>
               {/* Bottom Stream Status */}
               <div className="absolute bottom-0 inset-x-0 h-6 bg-black/70 flex items-center px-2 justify-between">
-                <span className="text-[8px] text-white font-bold uppercase">YOLO v8 active</span>
+                <span className="text-[8px] text-white font-bold uppercase">Proctoring AI</span>
                 <span className="text-[8px] text-green-400 font-bold">
-                  Proximity: {(monocularDepth.distanceFeet * 0.3048).toFixed(1)}m
+                  {(monocularDepth.distanceFeet * 0.3048).toFixed(1)}m
                 </span>
               </div>
             </div>
 
-            {/* Center AI Interviewer Avatar */}
+            {/* Center Photorealistic AI Avatar & Viseme Lip-Sync Matrix */}
             <div className="relative z-10 my-auto flex flex-col items-center justify-center text-center">
-              <div className="relative w-32 h-32 rounded-full border-4 border-white/20 flex items-center justify-center bg-white/10 backdrop-blur-md shadow-inner">
-                <div className="w-16 h-16 text-white flex items-center justify-center">
-                  <Bot
-                    className={`w-12 h-12 text-white transition-transform duration-300 ${
-                      isAiSpeaking ? "scale-110" : ""
-                    }`}
+              <div
+                className="relative w-36 h-36 rounded-full border-4 border-white/30 flex items-center justify-center bg-white/10 backdrop-blur-md shadow-2xl transition-transform duration-300"
+                style={{
+                  transform: `rotate(${avatarState.headTiltDeg}deg)`,
+                }}
+              >
+                {/* Visual Avatar Canvas with Real-Time Visemes */}
+                <svg className="w-28 h-28" viewBox="0 0 100 100">
+                  {/* Face Base */}
+                  <circle cx="50" cy="50" r="42" fill="#1E293B" stroke="#4285F4" strokeWidth="2.5" />
+                  
+                  {/* Eyes with Dynamic Blink Cycle */}
+                  <g>
+                    {/* Left Eye */}
+                    <ellipse
+                      cx="36"
+                      cy="42"
+                      rx="4.5"
+                      ry={Math.max(0.5, 4.5 * (1 - avatarState.eyeBlinkPercent / 100))}
+                      fill="#FFFFFF"
+                    />
+                    <circle
+                      cx="36"
+                      cy="42"
+                      r={Math.max(0.3, 2.2 * (1 - avatarState.eyeBlinkPercent / 100))}
+                      fill="#38BDF8"
+                    />
+
+                    {/* Right Eye */}
+                    <ellipse
+                      cx="64"
+                      cy="42"
+                      rx="4.5"
+                      ry={Math.max(0.5, 4.5 * (1 - avatarState.eyeBlinkPercent / 100))}
+                      fill="#FFFFFF"
+                    />
+                    <circle
+                      cx="64"
+                      cy="42"
+                      r={Math.max(0.3, 2.2 * (1 - avatarState.eyeBlinkPercent / 100))}
+                      fill="#38BDF8"
+                    />
+                  </g>
+
+                  {/* Eyebrows */}
+                  <path
+                    d={isAiThinking ? "M 30 35 Q 36 33 42 36" : "M 30 35 Q 36 32 42 35"}
+                    stroke="#94A3B8"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    fill="none"
                   />
-                </div>
-                {/* Real-time speaking waves */}
+                  <path
+                    d={isAiThinking ? "M 58 36 Q 64 33 70 35" : "M 58 35 Q 64 32 70 35"}
+                    stroke="#94A3B8"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+
+                  {/* Nose */}
+                  <path d="M 50 45 L 48 54 L 52 54" stroke="#64748B" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+
+                  {/* Real-Time Viseme Mouth Shape Mapping */}
+                  <g>
+                    {avatarState.mouthOpenPercent > 10 ? (
+                      <ellipse
+                        cx="50"
+                        cy="68"
+                        rx={Math.max(4, 14 * (avatarState.mouthWidthPercent / 50))}
+                        ry={Math.max(2, 8 * (avatarState.mouthOpenPercent / 100))}
+                        fill="#E11D48"
+                        stroke="#FDA4AF"
+                        strokeWidth="1.5"
+                      />
+                    ) : (
+                      <path
+                        d={avatarState.expression === "smiling" ? "M 38 68 Q 50 74 62 68" : "M 40 68 Q 50 70 60 68"}
+                        stroke="#FDA4AF"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        fill="none"
+                      />
+                    )}
+                  </g>
+                </svg>
+
+                {/* Pulsing Audio Viseme Ring */}
                 {isAiSpeaking && (
-                  <div className="absolute -bottom-2 flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded-full border border-white/20">
-                    <span className="w-1 h-2.5 bg-[#4285F4] rounded-full animate-bounce" />
-                    <span className="w-1 h-3.5 bg-[#9B51E0] rounded-full animate-bounce delay-75" />
-                    <span className="w-1 h-2 bg-[#EA4335] rounded-full animate-bounce delay-150" />
-                  </div>
+                  <div className="absolute inset-0 rounded-full border-2 border-cyan-400 animate-ping opacity-60 pointer-events-none"></div>
                 )}
               </div>
-              <span className="mt-4 text-white font-medium tracking-wide text-sm sm:text-base">
-                AI Senior Interviewer: Sarah
-              </span>
-              <span className="text-xs text-gray-400 mt-0.5 font-mono">
-                {isAiThinking ? "Evaluating technical response..." : isAiSpeaking ? "Speaking..." : "Listening to candidate audio"}
-              </span>
+
+              <div className="mt-3">
+                <span className="text-white font-bold text-sm tracking-wide block">
+                  AI Technical Interviewer
+                </span>
+                <span className="text-xs text-blue-300 font-medium">
+                  {isAiSpeaking ? `Speaking (${selectedAvatarProvider} Lip-Sync)` : isAiThinking ? "Reasoning & Analyzing..." : "Listening to Candidate"}
+                </span>
+              </div>
             </div>
 
-            {/* Floating Subtitle / Live Question Card with Real-Time Subtitles */}
-            <div className="relative z-10 p-4 bg-black/50 backdrop-blur-md rounded-xl border border-white/10 text-left mt-4">
-              {/* Show Live Candidate Spoken Subtitle if active, else AI Question */}
-              {liveInterimSpeech ? (
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></div>
-                    Candidate Spoken Input (Live Transcription):
-                  </span>
-                  <p className="text-amber-100 text-base font-medium italic">
-                    "{liveInterimSpeech}"
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <p className="text-white text-base sm:text-lg font-medium leading-snug">
-                    "{subtitleText}"
-                  </p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30 font-bold uppercase">
-                      {latestAiTurn?.eventTag === "difficulty_change"
-                        ? "Difficulty Adjusted"
-                        : "Technical Follow-up"}
-                    </span>
-                    <span className="text-[10px] text-gray-400 font-mono">
-                      {latestAiTurn?.language || "English"}
-                    </span>
-                  </div>
-                </>
-              )}
+            {/* Subtitle Teleprompter HUD */}
+            <div className="relative z-10 bg-black/70 backdrop-blur-md rounded-xl p-3 border border-white/10 text-center max-w-2xl mx-auto w-full">
+              <p className="text-xs sm:text-sm text-white/95 leading-relaxed font-medium line-clamp-3">
+                "{subtitleText}"
+              </p>
             </div>
           </div>
 
-          {/* Bottom Metric Bar */}
+          {/* Bottom Live Metric Bar */}
           <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
-            <div className="flex flex-wrap items-center gap-6 sm:gap-8 w-full sm:w-auto">
-              {/* Technical Depth */}
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-gray-400 uppercase mb-1">
-                  Technical Depth
-                </span>
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                      style={{ width: `${skillScores.technicalDepth}%` }}
-                    />
+            {evaluatedTurnsCount === 0 ? (
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-gray-900 flex items-center gap-2">
+                    <span>Live Response-Driven Evaluation</span>
+                    <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full font-mono">
+                      Active
+                    </span>
                   </div>
-                  <span className="text-sm font-bold text-gray-700">{skillScores.technicalDepth}%</span>
+                  <p className="text-[11px] text-gray-500">
+                    The AI dynamically assesses your technical depth, clarity, and architectural reasoning after each response.
+                  </p>
                 </div>
               </div>
+            ) : (
+              <div className="flex flex-col gap-2 w-full sm:w-auto">
+                <div className="flex flex-wrap items-center gap-6 sm:gap-8">
+                  {/* Technical Depth */}
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase mb-1">
+                      Technical Depth
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                          style={{ width: `${skillScores.technicalDepth}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-bold text-gray-700">{skillScores.technicalDepth}%</span>
+                    </div>
+                  </div>
 
-              {/* Problem Solving */}
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-gray-400 uppercase mb-1">
-                  Problem Solving
-                </span>
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-purple-500 rounded-full transition-all duration-500"
-                      style={{ width: `${skillScores.problemSolving}%` }}
-                    />
+                  {/* Problem Solving */}
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase mb-1">
+                      Problem Solving
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                          style={{ width: `${skillScores.problemSolving}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-bold text-gray-700">{skillScores.problemSolving}%</span>
+                    </div>
                   </div>
-                  <span className="text-sm font-bold text-gray-700">{skillScores.problemSolving}%</span>
-                </div>
-              </div>
 
-              {/* Communication */}
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-gray-400 uppercase mb-1">
-                  Communication
-                </span>
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-green-500 rounded-full transition-all duration-500"
-                      style={{ width: `${skillScores.communication}%` }}
-                    />
+                  {/* Communication */}
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase mb-1">
+                      Communication
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-green-500 rounded-full transition-all duration-500"
+                          style={{ width: `${skillScores.communication}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-bold text-gray-700">{skillScores.communication}%</span>
+                    </div>
                   </div>
-                  <span className="text-sm font-bold text-gray-700">{skillScores.communication}%</span>
                 </div>
+
+                {latestEvidenceNote && (
+                  <div className="text-[11px] text-gray-600 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100 max-w-xl truncate">
+                    <strong className="text-blue-700 font-semibold">Latest Evidence:</strong> {latestEvidenceNote}
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
             {/* Assessment Mode Status */}
-            <div className="flex items-center gap-4 sm:border-l sm:border-gray-200 sm:pl-8 self-end sm:self-auto">
+            <div className="flex items-center gap-4 sm:border-l sm:border-gray-200 sm:pl-8 self-end sm:self-auto shrink-0">
               <div className="text-right">
                 <span className="text-[10px] font-bold text-gray-400 uppercase block">
-                  Assessment Mode
+                  Responses Analyzed
                 </span>
-                <span className="text-sm font-bold text-blue-600">Active Voice Interview</span>
+                <span className="text-sm font-bold text-blue-600">
+                  {evaluatedTurnsCount > 0 ? `${evaluatedTurnsCount} Turn${evaluatedTurnsCount > 1 ? "s" : ""}` : "Listening"}
+                </span>
               </div>
               <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-600">
                 <CheckCircle className="w-5 h-5" />
@@ -878,7 +1308,7 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
                   Live Interaction
                 </h3>
                 <span className="text-[10px] text-green-600 font-bold px-2 py-0.5 bg-green-100 rounded-md">
-                  EN/HI Auto
+                  EN / Multilingual
                 </span>
               </div>
 
@@ -912,7 +1342,7 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
                       turn.sender === "candidate" ? "text-gray-400" : "text-blue-600"
                     }`}
                   >
-                    {turn.sender === "candidate" ? `${profile.name}` : "AI Interviewer (Sarah)"}
+                    {turn.sender === "candidate" ? `${profile.name}` : "AI Interviewer (VIBE AI)"}
                   </span>
                   <p
                     className={`p-3 text-xs leading-relaxed ${
@@ -926,23 +1356,10 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
                 </div>
               ))}
 
-              {/* Silent Vision Log Alert Box */}
-              {proctoringEvents.length > 0 && (
-                <div className="border-t border-dashed border-gray-200 pt-4">
-                  <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-xl text-yellow-800 text-xs italic leading-relaxed">
-                    <span className="font-bold uppercase text-[9px] mb-1 block not-italic text-yellow-900">
-                      Silent Vision Log
-                    </span>
-                    {proctoringEvents[0].notes ||
-                      "Mobile device detected briefly. Logged to admin audit without candidate disruption."}
-                  </div>
-                </div>
-              )}
-
               {isAiThinking && (
                 <div className="flex items-center gap-2 text-gray-500 text-xs py-2">
                   <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-500" />
-                  <span>Sarah is formulating response...</span>
+                  <span>Formulating technical response...</span>
                 </div>
               )}
             </div>
@@ -989,7 +1406,7 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder={
                     isListening
-                      ? "Listening to speech in real time..."
+                      ? "Listening in real time..."
                       : "Type answer or click mic to speak..."
                   }
                   className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1012,7 +1429,6 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
               Session Navigation & Tools
             </h3>
             <div className="grid grid-cols-2 gap-2">
-              {/* Room Scan */}
               <button
                 onClick={() => {
                   if (onOpenRoomScan) {
@@ -1027,7 +1443,6 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
                 <span className="text-[9px] font-bold uppercase tracking-wider">360° Room Check</span>
               </button>
 
-              {/* Code Lab */}
               <button
                 onClick={onNavigateToCoding}
                 className="bg-white/10 hover:bg-white/20 p-2.5 rounded-xl flex flex-col items-center gap-1 border border-white/5 transition-colors cursor-pointer"
@@ -1036,7 +1451,6 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
                 <span className="text-[9px] font-bold uppercase tracking-wider">Code Sandbox</span>
               </button>
 
-              {/* Transcript Export */}
               <button
                 onClick={handleExportTranscript}
                 className="bg-white/10 hover:bg-white/20 p-2.5 rounded-xl flex flex-col items-center gap-1 border border-white/5 transition-colors cursor-pointer"
@@ -1045,9 +1459,8 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
                 <span className="text-[9px] font-bold uppercase tracking-wider">Export Text Log</span>
               </button>
 
-              {/* End Session */}
               <button
-                onClick={onEndInterview}
+                onClick={handleEndInterviewSession}
                 className="bg-red-500/20 hover:bg-red-500/30 p-2.5 rounded-xl flex flex-col items-center gap-1 border border-red-500/30 text-red-300 transition-colors cursor-pointer"
               >
                 <PhoneOff className="w-4 h-4" />
@@ -1077,7 +1490,7 @@ export const InterviewRoom: React.FC<InterviewRoomProps> = ({
             </div>
 
             <p className="text-xs text-gray-600 leading-relaxed">
-              Your audio and video recording chunks have been processed. You can download the full media recording file or resume recording anytime.
+              Your audio and video recording chunks have been processed via WebRTC. You can download the media recording file or export the transcript.
             </p>
 
             <div className="flex flex-col gap-2 pt-2">

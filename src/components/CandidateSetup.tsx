@@ -12,18 +12,15 @@ import {
   Layers,
   Code2,
   RefreshCw,
-  Zap,
   Phone,
   MapPin,
   Globe,
-  Linkedin,
-  Github,
-  DollarSign,
   Clock,
-  Sparkle,
+  Check,
+  Building2,
+  ArrowLeft,
 } from "lucide-react";
-import { CandidateProfile, QualificationMatch, InterviewPlan } from "../types";
-import { SAMPLE_CANDIDATES } from "../data/sampleCandidates";
+import { CandidateProfile, QualificationMatch, InterviewPlan, CompanyJobRole } from "../types";
 
 interface CandidateSetupProps {
   profile: CandidateProfile;
@@ -33,6 +30,9 @@ interface CandidateSetupProps {
   isLoadingPlan: boolean;
   onGeneratePlan: () => void;
   onProceedToRoomScan: () => void;
+  onBackToRoles?: () => void;
+  onBackToRolesCatalog?: () => void;
+  selectedRoleObj?: CompanyJobRole | null;
 }
 
 export const CandidateSetup: React.FC<CandidateSetupProps> = ({
@@ -43,492 +43,420 @@ export const CandidateSetup: React.FC<CandidateSetupProps> = ({
   isLoadingPlan,
   onGeneratePlan,
   onProceedToRoomScan,
+  onBackToRoles,
+  onBackToRolesCatalog,
+  selectedRoleObj,
 }) => {
-  const [selectedSampleId, setSelectedSampleId] = useState<string>("fullstack_senior");
-  const [showAdvancedFields, setShowAdvancedFields] = useState<boolean>(true);
+  const handleBack = onBackToRoles || onBackToRolesCatalog;
+  const [showAdvancedFields, setShowAdvancedFields] = useState<boolean>(false);
+  const [isParsingResume, setIsParsingResume] = useState<boolean>(false);
+  const [uploadSuccessMsg, setUploadSuccessMsg] = useState<string | null>(null);
 
-  const handleSelectSample = (sampleId: string) => {
-    setSelectedSampleId(sampleId);
-    const sample = SAMPLE_CANDIDATES.find((s) => s.id === sampleId);
-    if (sample) {
-      setProfile(sample.profile);
-    }
-  };
+  // File Upload Handler (PDF, DOCX, TXT)
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const autofillSpecificField = (key: keyof CandidateProfile, value: any) => {
-    setProfile((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+    setIsParsingResume(true);
+    setUploadSuccessMsg(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (text) {
+        setProfile((prev) => ({
+          ...prev,
+          resumeText: text.slice(0, 5000),
+        }));
+        setUploadSuccessMsg(`Parsed "${file.name}" (${Math.round(file.size / 1024)} KB) successfully into resume field!`);
+      }
+      setIsParsingResume(false);
+    };
+
+    reader.onerror = () => {
+      setIsParsingResume(false);
+    };
+
+    reader.readAsText(file);
   };
 
   return (
-    <div className="flex-1 bg-[#F8F9FA] text-[#202124] p-4 sm:p-6 flex flex-col gap-6">
-      {/* Top Banner with Professional Polish styling */}
-      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+    <div className="flex-1 bg-[#F8F9FA] text-[#202124] p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
+      {/* Top Banner with prominent Selected Company and Role */}
+      <div className="bg-white rounded-2xl p-6 sm:p-7 border border-gray-200 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 shadow-2xs mb-3 text-xs font-semibold text-[#1a73e8]">
-              <Sparkles className="w-3.5 h-3.5 text-[#4285F4]" />
-              <span>Step 1: Automated Candidate & Role Alignment</span>
+          <div className="max-w-2xl space-y-2">
+            <div className="flex items-center gap-3">
+              {handleBack && (
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Browse Other Roles</span>
+                </button>
+              )}
+              <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 shadow-2xs text-xs font-semibold text-[#1a73e8]">
+                <Sparkles className="w-3.5 h-3.5 text-[#4285F4]" />
+                <span>Step 2 of 4 • Candidate Details & Resume Submission</span>
+              </div>
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
-              Candidate Profile & Job Qualification
+
+            <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 tracking-tight">
+              Candidate Profile & Resume Verification
             </h1>
-            <p className="text-xs text-gray-600 mt-2 leading-relaxed">
-              Upload or enter the candidate's resume, contact info, and job description. Every field has 1-click demo autofill options. VIBE AI parses technical skills, evaluates job alignment, and dynamically drafts a customized multilingual interview roadmap.
+            <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
+              Enter your candidate details, target role, and CV/Resume. VIBE AI will analyze your technical background against the company job description and tailor your interview challenge.
             </p>
           </div>
 
-          {/* 10-Minute Demo Structure Overview Card */}
-          <div className="bg-gradient-to-br from-blue-50/80 via-white to-indigo-50/50 p-4 rounded-xl border border-blue-200/80 shadow-xs shrink-0 md:w-84">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-[#4285F4]" />
-                10-Min Demo Interview
-              </span>
+          {/* Selected Company & Role Card */}
+          <div className="bg-gradient-to-br from-blue-50 via-white to-indigo-50/50 p-4 rounded-xl border border-blue-200 shadow-xs shrink-0 md:w-88 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Applying For:</span>
               <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full">
-                60m Condensed
+                Target Role
               </span>
             </div>
-            <p className="text-[11px] text-gray-600 mb-2.5">
-              The full technical interview is paced for a high-density 10-minute demo session:
-            </p>
-            <div className="space-y-1.5 text-[11px]">
-              <div className="flex items-center justify-between p-1.5 bg-white rounded-lg border border-gray-100">
-                <span className="font-medium text-gray-800 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                  1. Personal Experience & Projects
-                </span>
-                <span className="font-mono text-[10px] text-gray-500 font-semibold">~3.5m</span>
+            <div>
+              <div className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                <span>{profile.targetCompany || selectedRoleObj?.companyName || "Tech Enterprise"}</span>
               </div>
-              <div className="flex items-center justify-between p-1.5 bg-white rounded-lg border border-gray-100">
-                <span className="font-medium text-gray-800 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                  2. Live Code Sandbox
-                </span>
-                <span className="font-mono text-[10px] text-indigo-600 font-semibold">~4.5m</span>
-              </div>
-              <div className="flex items-center justify-between p-1.5 bg-white rounded-lg border border-gray-100">
-                <span className="font-medium text-gray-800 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  3. Performance Synthesis
-                </span>
-                <span className="font-mono text-[10px] text-emerald-600 font-semibold">~2.0m</span>
+              <div className="text-sm font-extrabold text-gray-900 mt-0.5">
+                {profile.targetRole || selectedRoleObj?.title || "Full Stack Software Engineer"}
               </div>
             </div>
+            {selectedRoleObj?.location && (
+              <div className="text-[11px] text-gray-500 flex items-center gap-1 pt-1 border-t border-blue-100">
+                <MapPin className="w-3 h-3 text-gray-400" />
+                <span>{selectedRoleObj.location}</span>
+                {selectedRoleObj.salaryRange && (
+                  <span className="text-emerald-700 font-semibold ml-auto">{selectedRoleObj.salaryRange}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Form Inputs (7 cols) */}
+        {/* Left Column: Candidate Profile & Experience (7 cols) */}
         <div className="lg:col-span-7 space-y-6">
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-5">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <h2 className="text-sm font-bold text-gray-900 flex items-center space-x-2 uppercase tracking-wider">
                 <User className="w-4 h-4 text-[#4285F4]" />
-                <span>Candidate Personal & Job Details</span>
+                <span>Candidate Personal & Experience Profile</span>
               </h2>
-              <button
-                type="button"
-                onClick={() => handleSelectSample("fullstack_senior")}
-                className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer"
-              >
-                <Sparkle className="w-3 h-3 text-blue-500" />
-                <span>Autofill All Fields</span>
-              </button>
+              <span className="text-[11px] text-blue-600 font-semibold">
+                {profile.email || "leelamatta7@gmail.com"}
+              </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Full Name Field */}
+              {/* Full Name */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-gray-700">
-                    Full Name
-                  </label>
-                  <div className="flex gap-1 text-[10px]">
-                    <button
-                      type="button"
-                      onClick={() => autofillSpecificField("name", "Aarav Sharma")}
-                      className="px-1.5 py-0.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded cursor-pointer"
-                    >
-                      Aarav
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => autofillSpecificField("name", "Priya Patel")}
-                      className="px-1.5 py-0.5 bg-purple-50 text-purple-600 hover:bg-purple-100 rounded cursor-pointer"
-                    >
-                      Priya
-                    </button>
-                  </div>
-                </div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Candidate Full Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={profile.name}
                   onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Aarav Sharma"
+                  placeholder="e.g. Leela Matta"
+                  className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-medium"
+                />
+              </div>
+
+              {/* Email Address */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Email Address <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={profile.email || ""}
+                  onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                  placeholder="leelamatta7@gmail.com"
+                  className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                 />
               </div>
 
               {/* Target Job Role */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-gray-700">
-                    Target Job Role
-                  </label>
-                  <div className="flex gap-1 text-[10px]">
-                    <button
-                      type="button"
-                      onClick={() => autofillSpecificField("targetRole", "Senior Full-Stack Software Engineer")}
-                      className="px-1.5 py-0.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded cursor-pointer"
-                    >
-                      Full-Stack
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => autofillSpecificField("targetRole", "Lead Frontend Architect")}
-                      className="px-1.5 py-0.5 bg-purple-50 text-purple-600 hover:bg-purple-100 rounded cursor-pointer"
-                    >
-                      Frontend
-                    </button>
-                  </div>
-                </div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Target Technical Role <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={profile.targetRole}
                   onChange={(e) => setProfile({ ...profile, targetRole: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. Senior Full Stack Engineer"
+                  placeholder="e.g. Senior Full-Stack Cloud Engineer"
+                  className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-medium"
                 />
               </div>
-            </div>
 
-            {/* Contact & Personal Info Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Target Company */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-gray-700 flex items-center gap-1">
-                    <Phone className="w-3 h-3 text-gray-400" />
-                    <span>Phone No.</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => autofillSpecificField("phoneNumber", "+1 (415) 890-2345")}
-                    className="text-[10px] text-blue-600 hover:underline cursor-pointer"
-                  >
-                    Demo
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={profile.phoneNumber || ""}
-                  onChange={(e) => setProfile({ ...profile, phoneNumber: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-900 focus:bg-white focus:ring-1 focus:ring-blue-500"
-                  placeholder="+1 (555) 019-2834"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-gray-700 flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-gray-400" />
-                    <span>Location</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => autofillSpecificField("location", "San Francisco, CA")}
-                    className="text-[10px] text-blue-600 hover:underline cursor-pointer"
-                  >
-                    Demo
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={profile.location || ""}
-                  onChange={(e) => setProfile({ ...profile, location: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-900 focus:bg-white focus:ring-1 focus:ring-blue-500"
-                  placeholder="San Francisco, CA"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-gray-700 flex items-center gap-1">
-                    <DollarSign className="w-3 h-3 text-gray-400" />
-                    <span>Expected Comp.</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => autofillSpecificField("expectedSalary", "$165,000 - $185,000 USD")}
-                    className="text-[10px] text-blue-600 hover:underline cursor-pointer"
-                  >
-                    Demo
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={profile.expectedSalary || ""}
-                  onChange={(e) => setProfile({ ...profile, expectedSalary: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-900 focus:bg-white focus:ring-1 focus:ring-blue-500"
-                  placeholder="$160k - $180k"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-gray-700">
-                    Years of Experience
-                  </label>
-                  <div className="flex gap-1 text-[10px]">
-                    <button
-                      type="button"
-                      onClick={() => autofillSpecificField("experienceYears", 5)}
-                      className="px-1.5 py-0.5 bg-gray-100 hover:bg-gray-200 rounded cursor-pointer"
-                    >
-                      5y
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => autofillSpecificField("experienceYears", 8)}
-                      className="px-1.5 py-0.5 bg-gray-100 hover:bg-gray-200 rounded cursor-pointer"
-                    >
-                      8y
-                    </button>
-                  </div>
-                </div>
-                <input
-                  type="number"
-                  value={profile.experienceYears}
-                  onChange={(e) =>
-                    setProfile({ ...profile, experienceYears: Number(e.target.value) || 0 })
-                  }
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  min={0}
-                  max={40}
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-gray-700">
-                    Preferred Interview Languages
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => autofillSpecificField("preferredLanguages", ["English", "Hindi"])}
-                    className="text-[10px] text-blue-600 hover:underline cursor-pointer"
-                  >
-                    Demo: EN/HI
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={profile.preferredLanguages.join(", ")}
-                  onChange={(e) =>
-                    setProfile({
-                      ...profile,
-                      preferredLanguages: e.target.value.split(",").map((s) => s.trim()),
-                    })
-                  }
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g. English, Hindi, Telugu"
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-gray-700">
-                  Core Technical Skills
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Target Company Name
                 </label>
-                <button
-                  type="button"
-                  onClick={() => autofillSpecificField("skills", "React, TypeScript, Node.js, GraphQL, PostgreSQL, Docker, AWS")}
-                  className="text-[10px] text-blue-600 hover:underline cursor-pointer"
-                >
-                  Autofill Full Stack Stack
-                </button>
+                <input
+                  type="text"
+                  value={profile.targetCompany || ""}
+                  onChange={(e) => setProfile({ ...profile, targetCompany: e.target.value })}
+                  placeholder="e.g. Google Cloud"
+                  className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-medium"
+                />
               </div>
+
+              {/* Years of Experience */}
+              <div className="sm:col-span-2">
+                <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">
+                  <span>Years of Professional Experience:</span>
+                  <span className="text-blue-600 font-bold font-mono">{profile.experienceYears} Years</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="15"
+                  step="1"
+                  value={profile.experienceYears}
+                  onChange={(e) => setProfile({ ...profile, experienceYears: parseInt(e.target.value) || 0 })}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mt-2"
+                />
+                <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                  <span>0 (Junior/Entry)</span>
+                  <span>5 (Mid/Senior)</span>
+                  <span>10+ (Staff/Lead)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Core Skills Field */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Your Technical Skills (Comma-separated)
+              </label>
               <input
                 type="text"
                 value={profile.skills}
                 onChange={(e) => setProfile({ ...profile, skills: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="e.g. TypeScript, React, Python, Docker, PostgreSQL"
+                placeholder="TypeScript, React, Node.js, Express, PostgreSQL, Redis, Docker, System Design"
+                className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-mono"
               />
             </div>
-          </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <h2 className="text-sm font-bold text-gray-900 flex items-center space-x-2 border-b border-gray-100 pb-3 uppercase tracking-wider">
-              <FileText className="w-4 h-4 text-[#34A853]" />
-              <span>Resume Content & Job Description</span>
-            </h2>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-semibold text-gray-700">
-                  Candidate CV / Resume Text
+            {/* Resume Content & File Upload */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-gray-700">
+                  Candidate CV / Resume Details <span className="text-red-500">*</span>
                 </label>
-                <button
-                  type="button"
-                  onClick={() => autofillSpecificField("resumeText", SAMPLE_CANDIDATES[0].profile.resumeText)}
-                  className="text-[10px] text-blue-600 hover:underline cursor-pointer"
-                >
-                  Autofill Sample CV
-                </button>
+                <label className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-semibold rounded-lg cursor-pointer transition-colors border border-blue-200 shadow-2xs">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{isParsingResume ? "Parsing..." : "Upload Resume (TXT / PDF / DOCX)"}</span>
+                  <input
+                    type="file"
+                    accept=".txt,.pdf,.docx,.doc"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
               </div>
+
+              {uploadSuccessMsg && (
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{uploadSuccessMsg}</span>
+                </div>
+              )}
+
               <textarea
-                rows={4}
+                rows={6}
                 value={profile.resumeText}
                 onChange={(e) => setProfile({ ...profile, resumeText: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono text-gray-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 leading-relaxed"
-                placeholder="Paste candidate resume work history and achievements here..."
+                placeholder="Enter or paste your candidate CV / resume content, projects, experience, education, and technical architecture highlights here..."
+                className="w-full px-3.5 py-3 text-xs bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 leading-relaxed font-sans"
               />
             </div>
 
+            {/* Target Job Description */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-semibold text-gray-700">
-                  Job Description & Expectations
-                </label>
-                <button
-                  type="button"
-                  onClick={() => autofillSpecificField("jobDescription", SAMPLE_CANDIDATES[0].profile.jobDescription)}
-                  className="text-[10px] text-blue-600 hover:underline cursor-pointer"
-                >
-                  Autofill Sample JD
-                </button>
-              </div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Target Company Job Description & Role Requirements
+              </label>
               <textarea
-                rows={4}
+                rows={5}
                 value={profile.jobDescription}
                 onChange={(e) => setProfile({ ...profile, jobDescription: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono text-gray-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 leading-relaxed"
-                placeholder="Paste role requirements, tech stack, and evaluation criteria..."
+                placeholder="Job description details used to evaluate qualification match and generate tailored interview probes..."
+                className="w-full px-3.5 py-3 text-xs bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 leading-relaxed font-mono"
               />
             </div>
 
-            <div className="pt-2">
+            {/* Advanced Fields Toggle */}
+            <div className="pt-2 border-t border-gray-100">
               <button
+                type="button"
+                onClick={() => setShowAdvancedFields(!showAdvancedFields)}
+                className="text-xs font-semibold text-gray-600 hover:text-blue-600 flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>{showAdvancedFields ? "Hide" : "Show"} Optional Contact, Location & Portfolio Links</span>
+              </button>
+
+              {showAdvancedFields && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-100">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-gray-400" />
+                      Phone Number
+                    </label>
+                    <input
+                      type="text"
+                      value={profile.phoneNumber || ""}
+                      onChange={(e) => setProfile({ ...profile, phoneNumber: e.target.value })}
+                      placeholder="+1 (555) 728-1904"
+                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-300 rounded-xl focus:bg-white text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-gray-400" />
+                      Location
+                    </label>
+                    <input
+                      type="text"
+                      value={profile.location || ""}
+                      onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+                      placeholder="San Francisco, CA / Remote"
+                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-300 rounded-xl focus:bg-white text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-1">
+                      <Globe className="w-3 h-3 text-gray-400" />
+                      LinkedIn / GitHub URL
+                    </label>
+                    <input
+                      type="text"
+                      value={profile.linkedInUrl || profile.githubUrl || ""}
+                      onChange={(e) => setProfile({ ...profile, linkedInUrl: e.target.value })}
+                      placeholder="https://linkedin.com/in/username"
+                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-300 rounded-xl focus:bg-white text-gray-900"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Action Bar */}
+            <div className="pt-3 flex flex-col sm:flex-row items-center gap-3">
+              <button
+                type="button"
                 onClick={onGeneratePlan}
-                disabled={isLoadingPlan}
-                className="w-full py-3 px-5 bg-[#4285F4] hover:bg-[#3367D6] text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center space-x-2 disabled:opacity-60 cursor-pointer"
+                disabled={isLoadingPlan || !profile.name.trim() || !profile.resumeText.trim()}
+                className="w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#4285F4] hover:bg-[#3367D6] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
               >
                 {isLoadingPlan ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>VIBE AI is parsing qualifications & generating roadmap...</span>
+                    <span>Analyzing Resume with Gemini AI...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>Analyze Resume & Generate AI Interview Plan</span>
+                    <span>Analyze Match & Generate AI Interview Plan</span>
                   </>
                 )}
               </button>
+
+              {interviewPlan && (
+                <button
+                  type="button"
+                  onClick={onProceedToRoomScan}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  <span>Select Camera & 360° Scan</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Right Column: AI Analysis & Generated Roadmap Preview (5 cols) */}
+        {/* Right Column: AI Plan & Qualification Fit Feedback (5 cols) */}
         <div className="lg:col-span-5 space-y-6">
-          {/* Qualification Match Card */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-            <h2 className="text-sm font-bold text-gray-900 flex items-center justify-between border-b border-gray-100 pb-3 uppercase tracking-wider">
-              <span className="flex items-center space-x-2">
-                <Cpu className="w-4 h-4 text-[#EA4335]" />
-                <span>Qualification Match</span>
-              </span>
+          {/* Qualification Fit Card */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h2 className="text-sm font-bold text-gray-900 flex items-center space-x-2 uppercase tracking-wider">
+                <Briefcase className="w-4 h-4 text-[#4285F4]" />
+                <span>Qualification Fit Analysis</span>
+              </h2>
               {qualificationMatch && (
-                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                <span className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-900 text-xs font-extrabold font-mono">
                   {qualificationMatch.score}% Match
                 </span>
               )}
-            </h2>
+            </div>
 
             {qualificationMatch ? (
-              <div className="mt-4 space-y-4">
-                <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200">
-                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
-                    AI Candidate Fit Summary
-                  </span>
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    {qualificationMatch.summary}
-                  </p>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between text-xs mb-1.5 font-semibold text-gray-700">
+                    <span>JD Requirement Alignment</span>
+                    <span className="font-mono text-blue-700">{qualificationMatch.score}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className={`h-2.5 rounded-full transition-all duration-500 ${
+                        qualificationMatch.score >= 80
+                          ? "bg-emerald-500"
+                          : qualificationMatch.score >= 60
+                          ? "bg-blue-500"
+                          : "bg-amber-500"
+                      }`}
+                      style={{ width: `${qualificationMatch.score}%` }}
+                    ></div>
+                  </div>
                 </div>
 
+                <p className="text-xs text-gray-600 leading-relaxed bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  {qualificationMatch.summary}
+                </p>
+
+                {/* Matched Skills */}
                 <div>
-                  <span className="text-xs font-semibold text-gray-700 block mb-1.5">
-                    Matched Competencies ({qualificationMatch.matchedSkills.length})
+                  <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wider block mb-1.5">
+                    Verified Matched Skills:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {qualificationMatch.matchedSkills.map((skill, i) => (
                       <span
                         key={i}
-                        className="inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        className="inline-flex items-center gap-1 text-[11px] bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-lg border border-emerald-200 font-medium"
                       >
-                        <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" />
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                         {skill}
                       </span>
                     ))}
                   </div>
                 </div>
 
-                {qualificationMatch.missingSkills?.length > 0 && (
-                  <div>
-                    <span className="text-xs font-semibold text-gray-700 block mb-1.5">
-                      Skills to Probe in Interview
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {qualificationMatch.missingSkills.map((skill, i) => (
-                        <span
-                          key={i}
-                          className="inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200"
-                        >
-                          <AlertCircle className="w-3 h-3 mr-1 text-amber-600" />
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Flagged Discrepancies */}
-                {qualificationMatch.discrepancies && qualificationMatch.discrepancies.length > 0 && (
-                  <div className="p-3 bg-red-50/70 rounded-xl border border-red-200 space-y-1.5">
-                    <span className="text-[11px] font-bold text-red-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <AlertCircle className="w-3.5 h-3.5 text-red-600" />
-                      Flagged Discrepancies vs. Job Description
-                    </span>
-                    <ul className="space-y-1">
-                      {qualificationMatch.discrepancies.map((disc, i) => (
-                        <li key={i} className="text-xs text-red-900 flex items-start gap-1.5 leading-snug">
-                          <span className="text-red-500 font-bold">•</span>
-                          <span>{disc}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Areas for Clarification during Interview */}
+                {/* Probe Areas */}
                 {qualificationMatch.areasForClarification && qualificationMatch.areasForClarification.length > 0 && (
-                  <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200 space-y-1.5">
-                    <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                      Areas Requiring Clarification in Interview
+                  <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-200 space-y-1.5">
+                    <span className="text-[11px] font-bold text-blue-900 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 text-blue-600" />
+                      Live Interview Probe Focus:
                     </span>
-                    <ul className="space-y-1">
-                      {qualificationMatch.areasForClarification.map((area, i) => (
-                        <li key={i} className="text-xs text-amber-950 flex items-start gap-1.5 leading-snug">
-                          <span className="text-amber-600 font-bold">→</span>
-                          <span>{area}</span>
+                    <ul className="list-disc list-inside text-[11px] text-blue-950 space-y-1">
+                      {qualificationMatch.areasForClarification.map((area, idx) => (
+                        <li key={idx} className="leading-snug">
+                          {area}
                         </li>
                       ))}
                     </ul>
@@ -536,76 +464,60 @@ export const CandidateSetup: React.FC<CandidateSetupProps> = ({
                 )}
               </div>
             ) : (
-              <div className="py-8 text-center text-gray-400 space-y-2">
-                <Sparkles className="w-8 h-8 text-gray-300 mx-auto animate-pulse" />
-                <p className="text-xs">
-                  Click "Analyze Resume" to preview qualification scoring and skill alignments.
+              <div className="text-center py-8 text-gray-400 space-y-2">
+                <FileText className="w-8 h-8 mx-auto text-gray-300" />
+                <p className="text-xs text-gray-500">
+                  Fill your resume and click <strong>"Analyze Match & Generate AI Interview Plan"</strong> to evaluate qualification fit.
                 </p>
               </div>
             )}
           </div>
 
-          {/* Generated Plan & Next Step CTA */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <h2 className="text-sm font-bold text-gray-900 flex items-center space-x-2 border-b border-gray-100 pb-3 uppercase tracking-wider">
-              <Layers className="w-4 h-4 text-[#FBBC05]" />
-              <span>Interview Roadmap</span>
-            </h2>
+          {/* Interview Topics & Live Code Preview */}
+          {interviewPlan && (
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <h2 className="text-sm font-bold text-gray-900 flex items-center space-x-2 uppercase tracking-wider">
+                  <Layers className="w-4 h-4 text-[#4285F4]" />
+                  <span>Customized Technical Topics</span>
+                </h2>
+                <span className="text-xs bg-purple-50 text-purple-700 font-semibold px-2.5 py-0.5 rounded-full border border-purple-200">
+                  {interviewPlan.difficulty}
+                </span>
+              </div>
 
-            {interviewPlan ? (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <span className="text-xs font-semibold text-gray-700 block">
-                    Planned Assessment Topics
-                  </span>
-                  {interviewPlan.topics.map((t, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs"
-                    >
-                      <div className="font-semibold text-gray-900 flex items-center justify-between">
-                        <span>
-                          {idx + 1}. {t.name}
-                        </span>
-                        <span className="text-[10px] text-gray-500 font-normal">
-                          {t.expectedDepth}
-                        </span>
-                      </div>
-                      <p className="text-gray-600 mt-1 text-[11px]">{t.description}</p>
+              <div className="space-y-2.5">
+                {interviewPlan.topics.map((t, idx) => (
+                  <div key={idx} className="p-3 rounded-xl bg-gray-50 border border-gray-200 space-y-1">
+                    <div className="text-xs font-bold text-gray-900 flex items-center justify-between">
+                      <span>{t.name}</span>
+                      <span className="text-[10px] text-gray-500 font-mono">Topic {idx + 1}</span>
                     </div>
-                  ))}
-                </div>
-
-                <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-xs">
-                  <div className="font-semibold text-[#1a73e8] flex items-center gap-1.5 mb-1">
-                    <Code2 className="w-3.5 h-3.5" />
-                    <span>Live Coding Challenge Prepared:</span>
+                    <p className="text-[11px] text-gray-600 leading-snug">{t.description}</p>
                   </div>
-                  <p className="text-gray-800 font-medium">{interviewPlan.codingChallenge.title}</p>
-                  <p className="text-gray-500 text-[11px] mt-0.5">
-                    Difficulty: {interviewPlan.codingChallenge.difficulty} •{" "}
-                    {interviewPlan.codingChallenge.testCases.length} automated test cases
+                ))}
+              </div>
+
+              {interviewPlan.codingChallenge && (
+                <div className="p-3.5 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                      <Code2 className="w-3.5 h-3.5 text-indigo-600" />
+                      {interviewPlan.codingChallenge.title}
+                    </span>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
+                      {interviewPlan.codingChallenge.difficulty}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-indigo-950 line-clamp-2 leading-relaxed">
+                    {interviewPlan.codingChallenge.description}
                   </p>
                 </div>
-
-                <button
-                  onClick={onProceedToRoomScan}
-                  className="w-full py-3.5 px-5 bg-[#34A853] hover:bg-[#2D9247] text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center space-x-2 cursor-pointer mt-2"
-                >
-                  <span>Proceed to 360° Workspace Verification</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="py-8 text-center text-gray-400 space-y-2">
-                <Layers className="w-8 h-8 text-gray-300 mx-auto" />
-                <p className="text-xs">Interview topics will be generated based on the resume.</p>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
-
